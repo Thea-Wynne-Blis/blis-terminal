@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Blis Terminal",
+  "version": "0.1.0",
+  "identifier": "dev.blis.terminal",
+  "build": {
+    "beforeDevCommand": "pnpm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "terminal",
+        "title": "Blis Terminal",
+        "create": false,
+        "visible": false,
+        "width": 848,
+        "height": 540,
+        "center": true,
+        "transparent": true,
+        "theme": "Dark",
+        "resizable": true
+      }
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPCONFIG/backgrounds/*"]
+      },
+      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'",
+      "devCsp": "default-src 'self'; img-src 'self' asset: http://asset.localhost; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:1420; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/icon.ico"],
+    "useLocalToolsDir": true
+  }
+}
