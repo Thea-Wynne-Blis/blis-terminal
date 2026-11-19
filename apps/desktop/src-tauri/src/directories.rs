@@ -7,26 +7,64 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use crate::desktop_open::open_with_system;
+use crate::{desktop_open::open_with_system, file_operations as files};
 
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum DirectoryOperation {
     Pwd,
-    Cd { path: Option<String> },
-    Ls { path: Option<String> },
+    Cd {
+        path: Option<String>,
+    },
+    Ls {
+        path: Option<String>,
+    },
     OpenCurrent,
+    Mkdir {
+        path: String,
+    },
+    Copy {
+        source: String,
+        destination: String,
+        recursive: bool,
+    },
+    Move {
+        source: String,
+        destination: String,
+    },
+    Remove {
+        path: String,
+        recursive: bool,
+    },
+    FinishRemove {
+        id: u32,
+        confirmed: bool,
+    },
+}
+
+#[derive(Serialize)]
+struct RemovalRequest {
+    id: u32,
+    path: String,
 }
 
 #[derive(Serialize)]
 pub struct DirectoryOutcome {
     directory: String,
     text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    removal: Option<RemovalRequest>,
+}
+
+struct DirectorySession {
+    current: PathBuf,
+    pending_removal: Option<(u32, files::Item)>,
+    next_removal: u32,
 }
 
 pub struct DirectoryStore {
     home: PathBuf,
-    directory: Mutex<PathBuf>,
+    session: Mutex<DirectorySession>,
 }
 
 impl DirectoryStore {
@@ -34,34 +72,88 @@ impl DirectoryStore {
         let directory = dunce::canonicalize(&home).unwrap_or_else(|_| home.clone());
         Self {
             home,
-            directory: Mutex::new(directory),
+            session: Mutex::new(DirectorySession {
+                current: directory,
+                pending_removal: None,
+                next_removal: 0,
+            }),
         }
     }
 
     fn execute(&self, operation: DirectoryOperation) -> Result<DirectoryOutcome, String> {
-        let mut directory = self.directory.lock().map_err(|_| "当前目录暂时不可用。")?;
+        let mut session = self.session.lock().map_err(|_| "当前目录暂时不可用。")?;
+        let mut removal = None;
         let text = match operation {
-            DirectoryOperation::Pwd => directory.display().to_string(),
+            DirectoryOperation::Pwd => session.current.display().to_string(),
             DirectoryOperation::Cd { path } => {
-                let destination = self.resolve(&directory, path.as_deref().unwrap_or("~"))?;
-                *directory = require_directory(&destination)?;
+                let destination = self.resolve(&session.current, path.as_deref().unwrap_or("~"))?;
+                session.current = require_directory(&destination)?;
                 String::new()
             }
             DirectoryOperation::Ls { path } => {
-                let target = self.resolve(&directory, path.as_deref().unwrap_or("."))?;
+                let target = self.resolve(&session.current, path.as_deref().unwrap_or("."))?;
                 let target = require_directory(&target)?;
                 list_directory(&target).map_err(|error| directory_error(&target, error))?
             }
             DirectoryOperation::OpenCurrent => {
-                let target = require_directory(&directory)?;
+                let target = require_directory(&session.current)?;
                 open_with_system(target.as_os_str())
                     .map_err(|error| format!("无法打开当前目录（{error}）。"))?;
                 "已交给系统打开当前目录。".to_owned()
             }
+            DirectoryOperation::Mkdir { path } => {
+                files::make_directory(&self.resolve(&session.current, &path)?)?
+            }
+            DirectoryOperation::Copy {
+                source,
+                destination,
+                recursive,
+            } => {
+                let source = self.resolve(&session.current, &source)?;
+                let destination = self.resolve(&session.current, &destination)?;
+                files::copy(&source, &destination, recursive)?
+            }
+            DirectoryOperation::Move {
+                source,
+                destination,
+            } => {
+                let source = self.resolve(&session.current, &source)?;
+                let destination = self.resolve(&session.current, &destination)?;
+                files::move_item(&source, &destination, &session.current)?
+            }
+            DirectoryOperation::Remove { path, recursive } => {
+                let target = files::Item::read(&self.resolve(&session.current, &path)?)?;
+                target.check_movable(&session.current)?;
+                if target.is_dir() && !recursive {
+                    return Err("回收目录及其内容请使用 rm -r。".to_owned());
+                }
+                session.next_removal = session.next_removal.wrapping_add(1);
+                let id = session.next_removal;
+                let path = target.path.display().to_string();
+                session.pending_removal = Some((id, target));
+                let text = format!("等待确认将「{path}」送入回收站。");
+                removal = Some(RemovalRequest { id, path });
+                text
+            }
+            DirectoryOperation::FinishRemove { id, confirmed } => {
+                let target = session
+                    .pending_removal
+                    .take_if(|(pending_id, _)| *pending_id == id)
+                    .ok_or("该删除确认已失效，请重新执行 rm。")?
+                    .1;
+                if confirmed {
+                    target.check_movable(&session.current)?;
+                    target.ensure_unchanged()?;
+                    files::recycle(&target)?
+                } else {
+                    format!("已取消删除「{}」。", target.path.display())
+                }
+            }
         };
         Ok(DirectoryOutcome {
-            directory: directory.display().to_string(),
+            directory: session.current.display().to_string(),
             text,
+            removal,
         })
     }
 
@@ -157,6 +249,114 @@ pub async fn execute_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(windows)]
+    fn creates_copies_and_moves_items_without_overwriting() {
+        let sandbox = tempfile::tempdir().unwrap();
+        let root = sandbox.path();
+        let store = DirectoryStore::new(root.into());
+        let mkdir = || DirectoryOperation::Mkdir {
+            path: "项目 备份".into(),
+        };
+        store.execute(mkdir()).unwrap();
+        assert!(store.execute(mkdir()).err().unwrap().contains("已存在"));
+        fs::write(root.join("计划 草稿.md"), "original").unwrap();
+        let copy = || DirectoryOperation::Copy {
+            source: "计划 草稿.md".into(),
+            destination: "项目 备份".into(),
+            recursive: false,
+        };
+        store.execute(copy()).unwrap();
+        let copied = root.join("项目 备份/计划 草稿.md");
+        assert_eq!(fs::read_to_string(&copied).unwrap(), "original");
+        fs::write(&copied, "existing").unwrap();
+        assert!(store.execute(copy()).err().unwrap().contains("已存在"));
+
+        let mv = |destination: &str| DirectoryOperation::Move {
+            source: "计划 草稿.md".into(),
+            destination: destination.into(),
+        };
+        assert!(store
+            .execute(mv("项目 备份"))
+            .err()
+            .unwrap()
+            .contains("已存在"));
+        assert_eq!(fs::read_to_string(&copied).unwrap(), "existing");
+        store.execute(mv("完整 计划.md")).unwrap();
+        assert!(!root.join("计划 草稿.md").exists());
+        assert_eq!(
+            fs::read_to_string(root.join("完整 计划.md")).unwrap(),
+            "original"
+        );
+
+        let copy_dir = |destination: &str, recursive| DirectoryOperation::Copy {
+            source: "项目 备份".into(),
+            destination: destination.into(),
+            recursive,
+        };
+        assert!(store.execute(copy_dir("另一份", false)).is_err());
+        assert!(store.execute(copy_dir("项目 备份/自身", true)).is_err());
+        store.execute(copy_dir("另一份", true)).unwrap();
+        assert_eq!(
+            fs::read_to_string(root.join("另一份/计划 草稿.md")).unwrap(),
+            "existing"
+        );
+    }
+
+    #[test]
+    fn removal_requires_confirmation_and_rejects_changed_targets() {
+        let sandbox = tempfile::tempdir().unwrap();
+        let root = sandbox.path();
+        let path = root.join("待回收 文件.txt");
+        fs::write(&path, "original").unwrap();
+        let store = DirectoryStore::new(root.into());
+        let request = || DirectoryOperation::Remove {
+            path: "待回收 文件.txt".into(),
+            recursive: false,
+        };
+        let first = store.execute(request()).unwrap().removal.unwrap();
+        assert!(path.exists());
+        store
+            .execute(DirectoryOperation::FinishRemove {
+                id: first.id,
+                confirmed: false,
+            })
+            .unwrap();
+        assert!(path.exists());
+        assert!(store
+            .execute(DirectoryOperation::FinishRemove {
+                id: first.id,
+                confirmed: true
+            })
+            .is_err());
+        let second = store.execute(request()).unwrap().removal.unwrap();
+        fs::write(&path, "modified after confirmation request").unwrap();
+        assert!(store
+            .execute(DirectoryOperation::FinishRemove {
+                id: second.id,
+                confirmed: true
+            })
+            .err()
+            .unwrap()
+            .contains("目标已发生变化"));
+        assert!(path.exists());
+        assert!(store
+            .execute(DirectoryOperation::Remove {
+                path: ".".into(),
+                recursive: true
+            })
+            .is_err());
+        fs::create_dir(root.join("child")).unwrap();
+        assert!(store
+            .execute(DirectoryOperation::Remove {
+                path: "child".into(),
+                recursive: false
+            })
+            .err()
+            .unwrap()
+            .contains("rm -r"));
+    }
 
     #[test]
     fn changes_directory_and_lists_relative_paths_without_moving_on_failure() {

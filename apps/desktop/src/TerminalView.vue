@@ -10,7 +10,7 @@ import {
 } from 'vue'
 import BackgroundPicker from './BackgroundPicker.vue'
 import NoteEditor from './NoteEditor.vue'
-import NoteRemovalDialog from './NoteRemovalDialog.vue'
+import RemovalDialog from './RemovalDialog.vue'
 import type {
   AliasOperation,
   Appearance,
@@ -62,9 +62,12 @@ const pickerOpen = ref(false)
 const pickerBusy = ref(false)
 const pickerError = ref('')
 const activeNote = ref<NoteDraft>()
-const pendingNoteRemoval = ref<{ id: number; title: string }>()
-const noteDialogOpen = computed(() =>
-  Boolean(activeNote.value || pendingNoteRemoval.value),
+type PendingRemoval = { entryId: number } & (
+  { kind: 'note'; title: string } | { kind: 'file'; id: number; path: string }
+)
+const pendingRemoval = ref<PendingRemoval>()
+const modalOpen = computed(() =>
+  Boolean(activeNote.value || pendingRemoval.value),
 )
 const selectedTheme = computed(() =>
   appearance.value?.themes.find(({ id }) => id === appearance.value?.selected),
@@ -110,16 +113,12 @@ function focusInput() {
 }
 
 function focusOnBlankClick(event: MouseEvent) {
-  if (
-    !noteDialogOpen.value &&
-    !pickerOpen.value &&
-    event.target === screen.value
-  )
+  if (!modalOpen.value && !pickerOpen.value && event.target === screen.value)
     focusInput()
 }
 
 function handleWindowFocus() {
-  if (!noteDialogOpen.value && !pickerOpen.value) focusInput()
+  if (!modalOpen.value && !pickerOpen.value) focusInput()
 }
 
 function closeNote() {
@@ -127,28 +126,44 @@ function closeNote() {
   void nextTick(focusInput)
 }
 
-function finishNoteRemoval(confirmed: boolean) {
-  const removal = pendingNoteRemoval.value
+function finishRemoval(confirmed: boolean) {
+  const removal = pendingRemoval.value
   if (!removal) return
-  pendingNoteRemoval.value = undefined
+  pendingRemoval.value = undefined
   void nextTick(focusInput)
-  if (!confirmed) {
-    setCommandOutput(removal.id, '已取消删除笔记「' + removal.title + '」。')
+  if (!confirmed && removal.kind === 'note') {
+    setCommandOutput(
+      removal.entryId,
+      '已取消删除笔记「' + removal.title + '」。',
+    )
     return
   }
 
-  setCommandOutput(removal.id, '正在删除笔记…')
+  if (confirmed)
+    setCommandOutput(
+      removal.entryId,
+      removal.kind === 'file' ? '正在送入回收站…' : '正在删除笔记…',
+    )
   commandQueue = commandQueue.then(async () => {
     try {
-      const outcome = await executeNote({
-        action: 'remove',
-        title: removal.title,
-        confirmed: true,
-      })
-      if (outcome.type !== 'message') throw new Error('无法确认笔记已删除。')
-      setCommandOutput(removal.id, outcome.text)
+      if (removal.kind === 'file') {
+        const outcome = await executeDirectory({
+          action: 'finish_remove',
+          id: removal.id,
+          confirmed,
+        })
+        setCommandOutput(removal.entryId, outcome.text)
+      } else {
+        const outcome = await executeNote({
+          action: 'remove',
+          title: removal.title,
+          confirmed: true,
+        })
+        if (outcome.type !== 'message') throw new Error('无法确认笔记已删除。')
+        setCommandOutput(removal.entryId, outcome.text)
+      }
     } catch (error) {
-      setCommandOutput(removal.id, errorMessage(error), true)
+      setCommandOutput(removal.entryId, errorMessage(error), true)
     }
   })
 }
@@ -274,13 +289,17 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
     if (command.type === 'alias') {
       output = await completeAliasCommand(command.operation)
     } else if (command.type === 'directory') {
+      if (command.operation.action === 'remove' && modalOpen.value)
+        throw new Error('请先完成当前操作。')
       const outcome = await executeDirectory(command.operation)
       workingDirectory.value = outcome.directory
+      if (outcome.removal)
+        pendingRemoval.value = { entryId: id, kind: 'file', ...outcome.removal }
       output = outcome.text
     } else if (command.type === 'note') {
       const operation = command.operation
       if (
-        noteDialogOpen.value &&
+        modalOpen.value &&
         (operation.action === 'new' ||
           operation.action === 'edit' ||
           operation.action === 'remove')
@@ -291,7 +310,11 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
         activeNote.value = outcome
         output = ''
       } else if (outcome.type === 'confirm_remove') {
-        pendingNoteRemoval.value = { id, title: outcome.title }
+        pendingRemoval.value = {
+          entryId: id,
+          kind: 'note',
+          title: outcome.title,
+        }
         output = '等待确认删除笔记「' + outcome.title + '」。'
       } else {
         output = outcome.text
@@ -372,8 +395,7 @@ function completeInput(event: KeyboardEvent) {
 }
 
 function handleInputKeydown(event: KeyboardEvent) {
-  if (noteDialogOpen.value || pickerOpen.value || isCompositionKey(event))
-    return
+  if (modalOpen.value || pickerOpen.value || isCompositionKey(event)) return
   if (isCommandCompletionKey(event)) {
     completeInput(event)
     return
@@ -407,7 +429,7 @@ function handleInputKeydown(event: KeyboardEvent) {
 }
 
 function handleKeydown(event: KeyboardEvent) {
-  if (noteDialogOpen.value) return
+  if (modalOpen.value) return
   if (pickerOpen.value) {
     if (isEscapeKey(event)) {
       event.preventDefault()
@@ -537,11 +559,17 @@ onUnmounted(() => {
       />
     </div>
     <NoteEditor v-if="activeNote" :note="activeNote" @close="closeNote" />
-    <NoteRemovalDialog
-      v-if="pendingNoteRemoval"
-      :title="pendingNoteRemoval.title"
-      @cancel="finishNoteRemoval(false)"
-      @confirm="finishNoteRemoval(true)"
+    <RemovalDialog
+      v-if="pendingRemoval"
+      :title="pendingRemoval.kind === 'note' ? '删除笔记' : '放入回收站'"
+      :description="
+        pendingRemoval.kind === 'note'
+          ? '确定永久删除笔记「' + pendingRemoval.title + '」吗？'
+          : '将「' + pendingRemoval.path + '」送入回收站？'
+      "
+      :confirm-label="pendingRemoval.kind === 'note' ? '删除' : '回收'"
+      @cancel="finishRemoval(false)"
+      @confirm="finishRemoval(true)"
     />
     <BackgroundPicker
       v-if="pickerOpen && appearance"

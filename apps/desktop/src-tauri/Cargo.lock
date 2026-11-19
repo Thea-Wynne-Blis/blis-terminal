@@ -284,6 +284,7 @@ dependencies = [
  "tauri-plugin-global-shortcut",
  "tauri-plugin-single-instance",
  "tempfile",
+ "windows",
  "windows-sys 0.61.2",
 ]
 

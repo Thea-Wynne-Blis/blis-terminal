@@ -6,6 +6,7 @@ mod appearance;
 mod config_file;
 mod desktop_open;
 mod directories;
+mod file_operations;
 mod lifecycle;
 mod notes;
 mod open_targets;

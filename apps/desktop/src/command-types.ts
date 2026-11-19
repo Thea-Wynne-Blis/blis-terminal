@@ -4,10 +4,16 @@ export type DirectoryOperation =
   | { action: 'pwd' | 'open_current' }
   | { action: 'cd'; path?: string }
   | { action: 'ls'; path?: string }
+  | { action: 'mkdir'; path: string }
+  | { action: 'copy'; source: string; destination: string; recursive: boolean }
+  | { action: 'move'; source: string; destination: string }
+  | { action: 'remove'; path: string; recursive: boolean }
+  | { action: 'finish_remove'; id: number; confirmed: boolean }
 
 export type DirectoryOutcome = {
   directory: string
   text: string
+  removal?: { id: number; path: string }
 }
 
 export type NoteFormat = 'md' | 'txt'

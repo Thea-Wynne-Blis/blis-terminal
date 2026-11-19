@@ -13,6 +13,10 @@ describe('terminal commands', () => {
     'pwd',
     'cd',
     'ls',
+    'mkdir',
+    'cp',
+    'mv',
+    'rm',
     'alias',
     'calc',
     'date',
@@ -125,6 +129,55 @@ describe('directory commands', () => {
       value: name + ' ',
     })
   })
+})
+
+describe('file commands', () => {
+  it.each([
+    ['mkdir "项目 备份"', { action: 'mkdir', path: '项目 备份' }],
+    [
+      'cp -r ".\\项目 A" "备份 B"',
+      {
+        action: 'copy',
+        source: '.\\项目 A',
+        destination: '备份 B',
+        recursive: true,
+      },
+    ],
+    [
+      'mv "草稿 A.md" "完成 B.md"',
+      { action: 'move', source: '草稿 A.md', destination: '完成 B.md' },
+    ],
+    ['rm -r "备份 B"', { action: 'remove', path: '备份 B', recursive: true }],
+    [
+      'rm -- -文件.txt',
+      { action: 'remove', path: '-文件.txt', recursive: false },
+    ],
+  ])('parses %s', (input, operation) => {
+    expect(executeTerminalInput(input, [])).toEqual({
+      type: 'directory',
+      operation,
+    })
+  })
+
+  it.each([
+    'rm --force test',
+    'cp missing-destination',
+    'mv -r x y',
+    'mkdir ""',
+  ])('rejects %s', (input) =>
+    expect(executeTerminalInput(input, [])).toMatchObject({ type: 'error' }),
+  )
+
+  it.each([
+    ['mk', 'mkdir'],
+    ['cp', 'cp'],
+    ['mv', 'mv'],
+    ['r', 'rm'],
+  ])('completes %s', (prefix, name) =>
+    expect(completeCommand(prefix, prefix.length)).toMatchObject({
+      value: name + ' ',
+    }),
+  )
 })
 
 describe('utility commands', () => {
