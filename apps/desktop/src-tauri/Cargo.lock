@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "blis-terminal"
-version = "0.2.1"
+version = "0.2.0"
 dependencies = [
  "dunce",
  "open",
