@@ -17,6 +17,7 @@ export function describeShortcuts(): string {
   const shortcuts = [
     ...outputShortcuts,
     ...historyShortcuts,
+    { label: 'Tab', description: '补全命令名，多项匹配时循环切换' },
     { label: 'Ctrl + C', description: '复制选中的文本' },
     { label: 'Ctrl + V', description: '粘贴到输入框' },
     { label: 'Esc', description: '隐藏终端窗口' },
@@ -48,17 +49,23 @@ export function getOutputShortcut(event: KeyboardEvent) {
 }
 
 export function getHistoryStep(event: KeyboardEvent) {
-  if (
-    event.defaultPrevented ||
-    isCompositionKey(event) ||
-    event.ctrlKey ||
-    event.altKey ||
-    event.metaKey ||
-    event.shiftKey
-  )
-    return undefined
-
+  if (!isUnmodifiedKey(event)) return undefined
   return historyShortcuts.find(({ key }) => key === event.key)?.step
+}
+
+function isUnmodifiedKey(event: KeyboardEvent): boolean {
+  return (
+    !event.defaultPrevented &&
+    !isCompositionKey(event) &&
+    !event.ctrlKey &&
+    !event.altKey &&
+    !event.metaKey &&
+    !event.shiftKey
+  )
+}
+
+export function isCommandCompletionKey(event: KeyboardEvent): boolean {
+  return event.key === 'Tab' && isUnmodifiedKey(event)
 }
 
 export function shouldHideTerminal(event: KeyboardEvent): boolean {

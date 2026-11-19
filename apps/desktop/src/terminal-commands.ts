@@ -6,6 +6,7 @@ import { searchDefinition } from './search-command'
 import { describeShortcuts } from './terminal-keyboard'
 
 export const terminalVersion = version
+const commandLine = /^(\s*)(\S+)(\s*)([\s\S]*)$/u
 
 const commands = new Map<string, CommandDefinition>([
   [
@@ -130,12 +131,62 @@ function unknownCommand(command: string): CommandResult {
   }
 }
 
+type CompletionOptions = {
+  leading: string
+  separator: string
+  args: string
+  names: string[]
+}
+
+export type CommandCompletion = {
+  value: string
+  caret: number
+  cycle?: { options: CompletionOptions; index: number }
+}
+
+function selectCompletion(
+  options: CompletionOptions,
+  index: number,
+): CommandCompletion {
+  const { leading, separator, args, names } = options
+  const prefix = leading + names[index] + separator
+  return {
+    value: prefix + args,
+    caret: prefix.length,
+    cycle: names.length > 1 ? { options, index } : undefined,
+  }
+}
+
+export function completeCommand(
+  value: string,
+  caret: number,
+  previous?: CommandCompletion,
+): CommandCompletion | undefined {
+  if (previous?.cycle && previous.value === value && previous.caret === caret) {
+    const { options, index } = previous.cycle
+    return selectCompletion(options, (index + 1) % options.names.length)
+  }
+
+  const [, leading, word, separator, args] = commandLine.exec(value) ?? []
+  if (!word || caret !== leading.length + word.length) return undefined
+
+  const key = word.toLowerCase()
+  const names = Array.from(commands.keys()).filter((name) =>
+    name.startsWith(key),
+  )
+  if (names.length) {
+    return selectCompletion(
+      { leading, separator: separator || ' ', args, names },
+      0,
+    )
+  }
+}
+
 export function executeTerminalInput(
   line: string,
   history: readonly string[],
 ): CommandResult {
-  const [, name = '', args = ''] =
-    /^\s*(\S+)(?:\s+([\s\S]*))?$/.exec(line) ?? []
+  const [, , name = '', , args = ''] = commandLine.exec(line) ?? []
   const key = name.toLowerCase()
   const command = commands.get(key)
   if (!command) return unknownCommand(name)

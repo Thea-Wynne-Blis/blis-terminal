@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { executeTerminalInput, terminalVersion } from './terminal-commands'
+import {
+  completeCommand,
+  executeTerminalInput,
+  terminalVersion,
+} from './terminal-commands'
 
 describe('terminal commands', () => {
   it.each([
@@ -54,6 +58,7 @@ describe('terminal commands', () => {
       'Ctrl + O',
       'Ctrl + C',
       'Ctrl + V',
+      'Tab',
       '↑',
       '↓',
       '鼠标拖选',
@@ -75,5 +80,43 @@ describe('terminal commands', () => {
       type: 'error',
       text: expect.stringContaining('help'),
     })
+  })
+})
+
+describe('command completion', () => {
+  it.each([
+    ['se', 'search'],
+    ['OP', 'open'],
+    ['bac', 'background'],
+    ['hi', 'history'],
+  ])('completes %s and places the caret after a space', (prefix, name) => {
+    expect(completeCommand(prefix, prefix.length)).toMatchObject({
+      value: name + ' ',
+      caret: name.length + 1,
+    })
+  })
+
+  it('cycles matches and preserves any existing arguments and spaces', () => {
+    const first = completeCommand('  s  bilibili csgo', 3)
+    expect(first).toMatchObject({ value: '  search  bilibili csgo', caret: 10 })
+    if (!first) throw new Error('Expected a first match')
+    const next = completeCommand(first.value, first.caret, first)
+    expect(next).toMatchObject({
+      value: '  shortcut  bilibili csgo',
+      caret: 12,
+    })
+    if (!next) throw new Error('Expected a second match')
+    expect(completeCommand(next.value, next.caret, next)).toEqual(first)
+    expect(completeCommand('op', 2, next)).toMatchObject({ value: 'open ' })
+    expect(completeCommand(next.value, next.value.length, next)).toBeUndefined()
+  })
+
+  it.each([
+    ['', 0],
+    ['xyz', 3],
+    ['search bilibili', 15],
+    ['sea', 2],
+  ])('does not complete %j at the given caret', (value, caret) => {
+    expect(completeCommand(value, caret)).toBeUndefined()
   })
 })

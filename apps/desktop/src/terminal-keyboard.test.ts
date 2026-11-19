@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getHistoryStep,
   getOutputShortcut,
+  isCommandCompletionKey,
   shouldHideTerminal,
 } from './terminal-keyboard'
 
@@ -29,6 +30,26 @@ describe('Escape to hide', () => {
     { repeat: true },
   ])('leaves the window visible for %o', (overrides) => {
     expect(shouldHideTerminal(keyEvent(overrides))).toBe(false)
+  })
+})
+
+describe('Tab command completion', () => {
+  it('uses Tab in the command input', () => {
+    expect(isCommandCompletionKey(keyEvent({ key: 'Tab' }))).toBe(true)
+  })
+
+  it.each([
+    { shiftKey: true },
+    { ctrlKey: true },
+    { altKey: true },
+    { metaKey: true },
+    { isComposing: true },
+    { keyCode: 229 },
+    { defaultPrevented: true },
+  ])('leaves modified or composing Tab to the WebView for %o', (overrides) => {
+    expect(isCommandCompletionKey(keyEvent({ key: 'Tab', ...overrides }))).toBe(
+      false,
+    )
   })
 })
 
