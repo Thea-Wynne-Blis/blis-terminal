@@ -3,7 +3,7 @@ import {
   getHistoryStep,
   getOutputShortcut,
   isCommandCompletionKey,
-  shouldHideTerminal,
+  isEscapeKey,
 } from './terminal-keyboard'
 
 function keyEvent(overrides: Partial<KeyboardEvent> = {}) {
@@ -17,9 +17,9 @@ function keyEvent(overrides: Partial<KeyboardEvent> = {}) {
   } as KeyboardEvent
 }
 
-describe('Escape to hide', () => {
-  it('hides on a single Escape press', () => {
-    expect(shouldHideTerminal(keyEvent())).toBe(true)
+describe('Escape for menus', () => {
+  it('recognizes a single Escape press', () => {
+    expect(isEscapeKey(keyEvent())).toBe(true)
   })
 
   it.each([
@@ -28,8 +28,8 @@ describe('Escape to hide', () => {
     { keyCode: 229 },
     { defaultPrevented: true },
     { repeat: true },
-  ])('leaves the window visible for %o', (overrides) => {
-    expect(shouldHideTerminal(keyEvent(overrides))).toBe(false)
+  ])('ignores other key events for %o', (overrides) => {
+    expect(isEscapeKey(keyEvent(overrides))).toBe(false)
   })
 })
 

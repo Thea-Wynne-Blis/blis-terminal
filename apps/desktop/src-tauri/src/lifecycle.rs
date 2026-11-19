@@ -58,22 +58,33 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 pub fn wake(app: &AppHandle) {
+    request_terminal(app, false);
+}
+
+pub fn toggle(app: &AppHandle) {
+    request_terminal(app, true);
+}
+
+fn request_terminal(app: &AppHandle, toggle: bool) {
     let app = app.clone();
 
     // WebView2 creation can block the Windows event loop if called from an event callback.
     tauri::async_runtime::spawn_blocking(move || {
-        if let Err(error) = show_terminal(&app) {
-            eprintln!("Failed to show terminal: {error}");
+        if let Err(error) = update_terminal(&app, toggle) {
+            eprintln!("Failed to update terminal visibility: {error}");
         }
     });
 }
 
-fn show_terminal(app: &AppHandle) -> tauri::Result<()> {
-    // Multiple sources can wake the terminal before the first window has finished opening.
+fn update_terminal(app: &AppHandle, toggle: bool) -> tauri::Result<()> {
+    // Serialize visibility changes and first-time creation.
     let wake_lock = app.state::<Mutex<()>>();
     let _guard = wake_lock.lock().unwrap_or_else(|error| error.into_inner());
 
     let window = match app.get_webview_window(TERMINAL_LABEL) {
+        Some(window) if toggle && window.is_visible()? && !window.is_minimized()? => {
+            return window.hide();
+        }
         Some(window) => window,
         None => {
             let config = app

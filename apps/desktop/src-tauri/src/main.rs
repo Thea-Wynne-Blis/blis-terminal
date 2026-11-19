@@ -39,7 +39,7 @@ fn main() {
             ShortcutPlugin::new()
                 .with_handler(|app, _, event| {
                     if event.state() == ShortcutState::Pressed {
-                        lifecycle::wake(app);
+                        lifecycle::toggle(app);
                     }
                 })
                 .build(),

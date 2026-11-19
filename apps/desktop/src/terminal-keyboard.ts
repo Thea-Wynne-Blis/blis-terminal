@@ -20,7 +20,8 @@ export function describeShortcuts(): string {
     { label: 'Tab', description: '补全命令名，多项匹配时循环切换' },
     { label: 'Ctrl + C', description: '复制选中的文本' },
     { label: 'Ctrl + V', description: '粘贴到输入框' },
-    { label: 'Esc', description: '隐藏终端窗口' },
+    { label: 'Alt + Space', description: '唤出或隐藏终端窗口' },
+    { label: 'Esc', description: '关闭背景菜单或取消笔记对话框' },
     { label: '鼠标拖选', description: '选择命令或输出文本' },
   ]
   return shortcuts
@@ -68,7 +69,7 @@ export function isCommandCompletionKey(event: KeyboardEvent): boolean {
   return event.key === 'Tab' && isUnmodifiedKey(event)
 }
 
-export function shouldHideTerminal(event: KeyboardEvent): boolean {
+export function isEscapeKey(event: KeyboardEvent): boolean {
   return (
     event.key === 'Escape' &&
     !event.defaultPrevented &&

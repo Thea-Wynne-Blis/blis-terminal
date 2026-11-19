@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core'
-import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   computed,
   nextTick,
@@ -35,7 +34,7 @@ import {
   getOutputShortcut,
   isCommandCompletionKey,
   isCompositionKey,
-  shouldHideTerminal,
+  isEscapeKey,
 } from './terminal-keyboard'
 
 type TranscriptEntry = {
@@ -55,7 +54,6 @@ const showWelcome = ref(true)
 const history: string[] = []
 const transcript = ref<TranscriptEntry[]>([])
 const shortcutStatus = ref('')
-const hideFailed = ref(false)
 const appearance = ref<Appearance>()
 const pickerOpen = ref(false)
 const pickerBusy = ref(false)
@@ -382,20 +380,10 @@ function handleInputKeydown(event: KeyboardEvent) {
   )
 }
 
-async function hideTerminal() {
-  hideFailed.value = false
-  try {
-    await getCurrentWindow().hide()
-  } catch (error) {
-    hideFailed.value = true
-    console.error('Failed to hide terminal window', error)
-  }
-}
-
 function handleKeydown(event: KeyboardEvent) {
   if (noteDialogOpen.value) return
   if (pickerOpen.value) {
-    if (shouldHideTerminal(event)) {
+    if (isEscapeKey(event)) {
       event.preventDefault()
       closePicker()
     }
@@ -411,12 +399,6 @@ function handleKeydown(event: KeyboardEvent) {
       toggleOutputs()
     }
     focusInput()
-    return
-  }
-
-  if (desktop && shouldHideTerminal(event)) {
-    event.preventDefault()
-    void hideTerminal()
   }
 }
 
@@ -440,7 +422,7 @@ onMounted(async () => {
     const shortcut = await invoke<string | null>('active_shortcut')
     const keys = shortcut?.replaceAll('+', ' + ')
     shortcutStatus.value = keys
-      ? `唤醒 ${keys}    隐藏 Esc`
+      ? `显示或隐藏 ${keys}`
       : '快捷键不可用，请从托盘唤醒。'
   } catch (error) {
     shortcutStatus.value = '读取快捷键失败，请从托盘唤醒。'
@@ -514,7 +496,6 @@ onUnmounted(() => {
         @keydown="handleInputKeydown"
       />
     </div>
-    <p v-if="hideFailed" class="error" role="alert">隐藏窗口失败，请重试。</p>
     <NoteEditor v-if="activeNote" :note="activeNote" @close="closeNote" />
     <NoteRemovalDialog
       v-if="pendingNoteRemoval"
