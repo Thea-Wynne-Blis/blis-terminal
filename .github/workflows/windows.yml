@@ -1,0 +1,40 @@
+name: Windows
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+      - name: Install pnpm
+        run: npm install --global pnpm@11.25.0
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Check frontend
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          pnpm lint
+          pnpm format:check
+          pnpm test
+          pnpm build
+      - name: Check Rust
+        working-directory: apps/desktop/src-tauri
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+      - name: Build Windows installer
+        run: pnpm tauri build -- --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: blis-terminal-windows-x64
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
