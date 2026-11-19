@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "terminal",
-  "description": "Read the hotkey, manage notes, aliases, open targets and search settings, and exit Blis.",
+  "description": "Read the hotkey, browse directories, manage notes, aliases, open targets and search settings, and exit Blis.",
   "windows": ["terminal"],
   "permissions": [
     "allow-active-shortcut",
     "allow-execute-alias",
     "allow-execute-appearance",
+    "allow-execute-directory",
     "allow-execute-note",
     "allow-execute-open-target",
     "allow-exit-app",

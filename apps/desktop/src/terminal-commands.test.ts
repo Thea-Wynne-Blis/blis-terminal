@@ -10,6 +10,9 @@ describe('terminal commands', () => {
     'help',
     'search',
     'open',
+    'pwd',
+    'cd',
+    'ls',
     'alias',
     'calc',
     'date',
@@ -83,6 +86,43 @@ describe('terminal commands', () => {
     expect(executeTerminalInput('dir', [])).toMatchObject({
       type: 'error',
       text: expect.stringContaining('help'),
+    })
+  })
+})
+
+describe('directory commands', () => {
+  it.each([
+    ['pwd', { action: 'pwd' }],
+    ['cd', { action: 'cd' }],
+    ['cd "G:\\项目 文件"', { action: 'cd', path: 'G:\\项目 文件' }],
+    ['cd ..', { action: 'cd', path: '..' }],
+    ['cd ~', { action: 'cd', path: '~' }],
+    ['ls', { action: 'ls' }],
+    ['ls "..\\项目 文件"', { action: 'ls', path: '..\\项目 文件' }],
+    ['open .', { action: 'open_current' }],
+  ])('routes %s to the directory session', (input, operation) => {
+    expect(executeTerminalInput(input, [])).toEqual({
+      type: 'directory',
+      operation,
+    })
+  })
+
+  it.each([
+    'pwd extra',
+    'cd Program Files',
+    'ls "missing quote',
+    'open . extra',
+  ])('rejects invalid input %s', (input) =>
+    expect(executeTerminalInput(input, [])).toMatchObject({ type: 'error' }),
+  )
+
+  it.each([
+    ['pw', 'pwd'],
+    ['cd', 'cd'],
+    ['l', 'ls'],
+  ])('completes %s', (prefix, name) => {
+    expect(completeCommand(prefix, prefix.length)).toMatchObject({
+      value: name + ' ',
     })
   })
 })

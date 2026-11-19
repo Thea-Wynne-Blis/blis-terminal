@@ -4,6 +4,7 @@ import { backgroundDefinition } from './background-command'
 import { calcDefinition } from './calc-command'
 import type { CommandDefinition, CommandResult } from './command-types'
 import { dateDefinition } from './date-command'
+import { cdDefinition, lsDefinition, pwdDefinition } from './directory-command'
 import { noteDefinition } from './note-command'
 import { openDefinition } from './open-command'
 import { searchDefinition } from './search-command'
@@ -26,6 +27,9 @@ const commands = new Map<string, CommandDefinition>([
   ],
   ['search', searchDefinition],
   ['open', openDefinition],
+  ['pwd', pwdDefinition],
+  ['cd', cdDefinition],
+  ['ls', lsDefinition],
   ['background', backgroundDefinition],
   ['alias', aliasDefinition],
   ['calc', calcDefinition],

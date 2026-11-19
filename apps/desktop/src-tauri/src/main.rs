@@ -5,6 +5,7 @@ mod app_start;
 mod appearance;
 mod config_file;
 mod desktop_open;
+mod directories;
 mod lifecycle;
 mod notes;
 mod open_targets;
@@ -49,6 +50,7 @@ fn main() {
             active_shortcut,
             aliases::execute_alias,
             appearance::execute_appearance,
+            directories::execute_directory,
             exit_app,
             notes::execute_note,
             open_targets::execute_open_target,
@@ -65,6 +67,11 @@ fn main() {
             }
         })
         .setup(move |app| {
+            let home = match app.path().home_dir() {
+                Ok(home) => home,
+                Err(_) => std::env::current_dir()?,
+            };
+            app.manage(directories::DirectoryStore::new(home));
             let config_directory = app.path().app_config_dir()?;
             app.manage(notes::NoteStore::new(config_directory.join("notes")));
             app.manage(aliases::AliasStore::new(

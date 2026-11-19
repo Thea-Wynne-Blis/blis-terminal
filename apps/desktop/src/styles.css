@@ -226,8 +226,16 @@ code,
   font-weight: 600;
 }
 
+.prompt > .prompt-mark {
+  max-width: 60%;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .prompt input {
-  width: 100%;
+  flex: 1;
   min-width: 0;
   padding: 0;
   border: 0;

@@ -274,6 +274,7 @@ dependencies = [
 name = "blis-terminal"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "open",
  "pulldown-cmark",
  "serde",

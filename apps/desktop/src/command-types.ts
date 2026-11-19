@@ -1,5 +1,15 @@
 export type OpenTargetKind = 'app' | 'folder' | 'file' | 'url'
 
+export type DirectoryOperation =
+  | { action: 'pwd' | 'open_current' }
+  | { action: 'cd'; path?: string }
+  | { action: 'ls'; path?: string }
+
+export type DirectoryOutcome = {
+  directory: string
+  text: string
+}
+
 export type NoteFormat = 'md' | 'txt'
 
 export type NoteCommand =
@@ -70,6 +80,7 @@ export type Appearance = {
 
 export type DesktopCommand =
   | { type: 'alias'; operation: AliasOperation }
+  | { type: 'directory'; operation: DirectoryOperation }
   | { type: 'note'; operation: NoteCommand }
   | { type: 'search'; operation: SearchOperation }
   | { type: 'open-target'; operation: OpenOperation }

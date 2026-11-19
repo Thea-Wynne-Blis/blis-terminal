@@ -20,6 +20,7 @@ import type {
 import {
   executeAlias,
   executeAppearance,
+  executeDirectory,
   executeNote,
   runDesktopCommand,
 } from './desktop-platform'
@@ -40,6 +41,7 @@ import {
 type TranscriptEntry = {
   id: number
   command: string
+  directory: string
   output: string
   error: boolean
   collapsed: boolean
@@ -50,6 +52,7 @@ const desktop = isTauri()
 const input = useTemplateRef<HTMLInputElement>('terminal-input')
 const screen = useTemplateRef<HTMLElement>('terminal-screen')
 const line = ref('')
+const workingDirectory = ref('')
 const showWelcome = ref(true)
 const history: string[] = []
 const transcript = ref<TranscriptEntry[]>([])
@@ -80,6 +83,7 @@ const maxTranscript = 200
 const maxOutputLength = 8192
 const pendingOutput: Record<DesktopCommand['type'], string> = {
   alias: '正在处理命令别名…',
+  directory: '正在处理目录命令…',
   note: '正在处理笔记…',
   search: '正在处理搜索请求…',
   'open-target': '正在处理打开清单…',
@@ -91,7 +95,15 @@ let historyPosition: number | undefined
 let draft = ''
 let completion: CommandCompletion | undefined
 let aliases = new Map<string, string>()
-let aliasQueue = Promise.resolve()
+let commandQueue = Promise.resolve()
+
+function promptFor(directory: string) {
+  return directory ? 'blis ' + directory + '>' : 'blis>'
+}
+
+function scrollToBottom() {
+  if (screen.value) screen.value.scrollTop = screen.value.scrollHeight
+}
 
 function focusInput() {
   input.value?.focus({ preventScroll: true })
@@ -126,7 +138,7 @@ function finishNoteRemoval(confirmed: boolean) {
   }
 
   setCommandOutput(removal.id, '正在删除笔记…')
-  aliasQueue = aliasQueue.then(async () => {
+  commandQueue = commandQueue.then(async () => {
     try {
       const outcome = await executeNote({
         action: 'remove',
@@ -192,8 +204,10 @@ function submitCommand() {
   history.push(command)
   if (history.length > maxHistory) history.shift()
 
-  // Expand commands after any preceding alias edits have been saved.
-  aliasQueue = aliasQueue.then(() => dispatchCommand(command, previousHistory))
+  // Read aliases and the current directory in the order commands were submitted.
+  commandQueue = commandQueue.then(() =>
+    dispatchCommand(command, previousHistory),
+  )
 }
 
 function dispatchCommand(command: string, previousHistory: readonly string[]) {
@@ -213,18 +227,22 @@ function dispatchCommand(command: string, previousHistory: readonly string[]) {
   transcript.value.push({
     id,
     command,
+    directory: workingDirectory.value,
     output: limitOutput(output),
     error: result.type === 'error',
     collapsed: false,
     launching: launchAlias !== undefined,
   })
   if (transcript.value.length > maxTranscript) transcript.value.shift()
-  void nextTick(() => {
-    if (screen.value) screen.value.scrollTop = screen.value.scrollHeight
-  })
+  void nextTick(scrollToBottom)
   if (desktopCommand) {
     const request = completeDesktopCommand(id, result)
-    if (result.type === 'alias' || result.type === 'note') return request
+    if (
+      result.type === 'alias' ||
+      result.type === 'directory' ||
+      result.type === 'note'
+    )
+      return request
   }
 }
 
@@ -255,6 +273,10 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
   try {
     if (command.type === 'alias') {
       output = await completeAliasCommand(command.operation)
+    } else if (command.type === 'directory') {
+      const outcome = await executeDirectory(command.operation)
+      workingDirectory.value = outcome.directory
+      output = outcome.text
     } else if (command.type === 'note') {
       const operation = command.operation
       if (
@@ -312,9 +334,13 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
 function setCommandOutput(id: number, output: string, failed = false) {
   const entry = transcript.value.find((entry) => entry.id === id)
   if (entry) {
+    const panel = screen.value
+    const followingOutput =
+      panel && panel.scrollHeight - panel.clientHeight - panel.scrollTop <= 2
     entry.output = limitOutput(output)
     entry.error = failed
     entry.launching = false
+    if (followingOutput) void nextTick(scrollToBottom)
   }
 }
 
@@ -408,9 +434,18 @@ onMounted(async () => {
   window.addEventListener('keydown', handleKeydown)
   if (!desktop) return
 
-  aliasQueue = refreshAliases({ action: 'list' }).catch((error) =>
-    console.error('Failed to load aliases', error),
-  )
+  commandQueue = Promise.all([
+    refreshAliases({ action: 'list' }).catch((error) =>
+      console.error('Failed to load aliases', error),
+    ),
+    executeDirectory({ action: 'pwd' })
+      .then((outcome) => {
+        workingDirectory.value = outcome.directory
+      })
+      .catch((error) =>
+        console.error('Failed to read current directory', error),
+      ),
+  ]).then(() => undefined)
 
   void executeAppearance({ action: 'get' })
     .then((settings) => {
@@ -463,7 +498,8 @@ onUnmounted(() => {
     <section class="transcript" role="log" aria-label="命令输出">
       <div v-for="entry in transcript" :key="entry.id" class="entry">
         <p class="command">
-          <span class="prompt-mark">blis&gt;</span> {{ entry.command }}
+          <span class="prompt-mark">{{ promptFor(entry.directory) }}</span>
+          {{ entry.command }}
         </p>
         <pre
           v-if="entry.output && !entry.collapsed"
@@ -478,8 +514,12 @@ onUnmounted(() => {
     </section>
 
     <div class="prompt">
-      <label class="prompt-mark" for="terminal-input" aria-hidden="true"
-        >blis&gt;</label
+      <label
+        class="prompt-mark"
+        for="terminal-input"
+        aria-hidden="true"
+        :title="workingDirectory"
+        >{{ promptFor(workingDirectory) }}</label
       >
       <input
         id="terminal-input"

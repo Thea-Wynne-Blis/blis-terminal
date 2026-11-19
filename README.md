@@ -8,6 +8,19 @@
 
 新增命令时实现 `CommandDefinition`，再加入 `apps/desktop/src/terminal-commands.ts` 的命令表。
 
+## 浏览目录
+
+```text
+pwd
+cd "G:\web-ai-code\blis-terminal"
+ls
+ls ..
+open .
+cd ~
+```
+
+提示符显示当前目录。`cd` 支持跨盘、相对路径和带空格的路径，路径含空格时请加引号。输入 `cd` 或 `cd ~` 可回到 Windows 用户目录。`ls` 默认列出当前位置，也可指定另一个目录。`open .` 用资源管理器打开当前目录。隐藏窗口后再唤出会保留当前位置，重启 Blis 后从 Windows 用户目录开始。输入 `help pwd`、`help cd`、`help ls` 或 `help open` 可查看用法。
+
 ## 命令别名
 
 ```text

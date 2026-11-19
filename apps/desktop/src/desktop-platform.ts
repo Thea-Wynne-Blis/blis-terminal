@@ -4,6 +4,8 @@ import type {
   Appearance,
   AppearanceOperation,
   DesktopCommand,
+  DirectoryOperation,
+  DirectoryOutcome,
   NoteOperation,
   NoteOutcome,
   OpenOperation,
@@ -36,6 +38,14 @@ const kindNames: Record<OpenTargetKind, string> = {
 let openQueue = Promise.resolve()
 let appearanceQueue = Promise.resolve()
 let searchQueue = Promise.resolve()
+
+export function executeDirectory(
+  operation: DirectoryOperation,
+): Promise<DirectoryOutcome> {
+  if (!isTauri())
+    return Promise.reject(new Error('请在 Blis 桌面版中执行此命令。'))
+  return invoke('execute_directory', { operation })
+}
 
 export function executeNote(operation: NoteOperation): Promise<NoteOutcome> {
   if (!isTauri())
@@ -106,7 +116,10 @@ async function executeOpenOperation(operation: OpenOperation): Promise<string> {
 }
 
 export async function runDesktopCommand(
-  command: Exclude<DesktopCommand, { type: 'alias' | 'background' | 'note' }>,
+  command: Exclude<
+    DesktopCommand,
+    { type: 'alias' | 'background' | 'directory' | 'note' }
+  >,
 ): Promise<string> {
   if (!isTauri()) throw new Error('请在 Blis 桌面版中执行此命令。')
   switch (command.type) {
