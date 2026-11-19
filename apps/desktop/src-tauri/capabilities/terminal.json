@@ -7,6 +7,7 @@
     "allow-active-shortcut",
     "allow-execute-alias",
     "allow-execute-appearance",
+    "allow-execute-note",
     "allow-execute-open-target",
     "allow-exit-app",
     "allow-execute-search",

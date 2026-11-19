@@ -107,6 +107,77 @@ body {
   margin-top: 8px;
 }
 
+.note-editor {
+  width: min(42rem, calc(100% - 28px));
+  height: min(31rem, calc(100% - 28px));
+  padding: 14px;
+  border: 1px solid var(--muted);
+  border-radius: 7px;
+  background: var(--menu-surface);
+  color: inherit;
+}
+
+.note-editor[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-removal-dialog {
+  width: min(30rem, calc(100% - 28px));
+  height: auto;
+  overflow-wrap: anywhere;
+}
+
+.note-editor::backdrop {
+  background: rgb(0 0 0 / 36%);
+}
+
+.note-editor h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  overflow-wrap: anywhere;
+}
+
+.note-editor textarea {
+  flex: 1;
+  min-height: 4rem;
+  padding: 8px;
+  resize: none;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  caret-color: var(--accent);
+  font: inherit;
+}
+
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-actions button {
+  padding: 4px 8px;
+  border: 1px solid var(--muted);
+  border-radius: 4px;
+  background: var(--menu-highlight);
+  color: inherit;
+  font: inherit;
+}
+
+.note-actions button.error {
+  color: var(--error);
+}
+
+.note-editor :focus-visible {
+  outline: 2px solid var(--focus-accent);
+  outline-offset: 2px;
+}
+
 .welcome {
   margin-bottom: 1.5em;
 }

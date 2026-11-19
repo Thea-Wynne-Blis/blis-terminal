@@ -13,6 +13,7 @@ describe('terminal commands', () => {
     'alias',
     'calc',
     'date',
+    'note',
     'shortcut',
     'exit',
     'echo',
@@ -125,9 +126,51 @@ describe('utility commands', () => {
     }
   })
 
+  it.each(['-o', '--out'])('parses Windows export paths with %s', (flag) => {
+    expect(executeTerminalInput('note new "项目 计划"', [])).toEqual({
+      type: 'note',
+      operation: { action: 'new', title: '项目 计划' },
+    })
+    const output = 'D:\\笔记 备份\\项目计划.txt'
+    expect(
+      executeTerminalInput(
+        'note export "项目 计划" --format txt ' + flag + ' "' + output + '"',
+        [],
+      ),
+    ).toEqual({
+      type: 'note',
+      operation: {
+        action: 'export',
+        title: '项目 计划',
+        format: 'txt',
+        output,
+      },
+    })
+    expect(executeTerminalInput('note export test -f pdf', [])).toMatchObject({
+      type: 'error',
+    })
+  })
+
+  it('requests note removal without granting confirmation', () => {
+    expect(executeTerminalInput('note remove "项目 计划"', [])).toEqual({
+      type: 'note',
+      operation: { action: 'remove', title: '项目 计划' },
+    })
+    expect(
+      executeTerminalInput('note remove "项目 计划" --force', []),
+    ).toMatchObject({
+      type: 'error',
+    })
+    expect(executeTerminalInput('help note', [])).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('note remove'),
+    })
+  })
+
   it.each([
     ['ca', 'calc'],
     ['da', 'date'],
+    ['no', 'note'],
   ])('completes %s', (prefix, name) =>
     expect(completeCommand(prefix, prefix.length)).toMatchObject({
       value: name + ' ',

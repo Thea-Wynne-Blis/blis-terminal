@@ -20,15 +20,23 @@ help alias
 
 `bilibili csgo` 会执行 `search bilibili csgo`。别名支持中文和 Tab 补全，目标可使用任意内置 Blis 命令。附加参数接在目标命令后面。别名保存在 `%APPDATA%/dev.blis.terminal/aliases.json`，重启后仍可使用。
 
-## 计算与时间
+## 计算、时间和笔记
 
 ```text
 calc 12 + 3 * (8 - 2)
 date
 date -u --iso
+note new "项目计划"
+note edit "项目计划"
+note list
+note remove "项目计划"
+note export "项目计划" -f md
+note export "项目计划" --format txt -o "D:/笔记/项目计划.txt"
 ```
 
 `calc` 支持加减乘除、括号、正负号和小数。`date` 显示本机时间，`-u` 显示 UTC，`--iso` 输出 ISO 8601 格式。
+
+在笔记编辑器中按 `Ctrl+S` 保存。笔记以 Markdown 文件保存在当前 Windows 用户的 `%APPDATA%/dev.blis.terminal/notes/`。`note remove` 会弹出确认窗口。选择取消或按 Esc 会保留笔记。默认导出到系统「文档」里的 `Blis Notes` 文件夹。使用 `-o` 或 `--out` 可指定其他绝对文件路径，请选择已存在的目录。导出时会保留已有的同名文件。输入 `help calc`、`help date` 或 `help note` 可查看详细说明。
 
 ## 搜索与打开网页
 

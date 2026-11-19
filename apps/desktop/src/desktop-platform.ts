@@ -4,6 +4,8 @@ import type {
   Appearance,
   AppearanceOperation,
   DesktopCommand,
+  NoteOperation,
+  NoteOutcome,
   OpenOperation,
   OpenTargetKind,
 } from './command-types'
@@ -34,6 +36,12 @@ const kindNames: Record<OpenTargetKind, string> = {
 let openQueue = Promise.resolve()
 let appearanceQueue = Promise.resolve()
 let searchQueue = Promise.resolve()
+
+export function executeNote(operation: NoteOperation): Promise<NoteOutcome> {
+  if (!isTauri())
+    return Promise.reject(new Error('请在 Blis 桌面版中执行此命令。'))
+  return invoke('execute_note', { operation })
+}
 
 export function executeAlias(
   operation: AliasOperation,
@@ -98,7 +106,7 @@ async function executeOpenOperation(operation: OpenOperation): Promise<string> {
 }
 
 export async function runDesktopCommand(
-  command: Exclude<DesktopCommand, { type: 'alias' | 'background' }>,
+  command: Exclude<DesktopCommand, { type: 'alias' | 'background' | 'note' }>,
 ): Promise<string> {
   if (!isTauri()) throw new Error('请在 Blis 桌面版中执行此命令。')
   switch (command.type) {

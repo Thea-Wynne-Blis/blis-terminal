@@ -4,6 +4,7 @@ import { backgroundDefinition } from './background-command'
 import { calcDefinition } from './calc-command'
 import type { CommandDefinition, CommandResult } from './command-types'
 import { dateDefinition } from './date-command'
+import { noteDefinition } from './note-command'
 import { openDefinition } from './open-command'
 import { searchDefinition } from './search-command'
 import { describeShortcuts } from './terminal-keyboard'
@@ -29,6 +30,7 @@ const commands = new Map<string, CommandDefinition>([
   ['alias', aliasDefinition],
   ['calc', calcDefinition],
   ['date', dateDefinition],
+  ['note', noteDefinition],
   [
     'shortcut',
     {

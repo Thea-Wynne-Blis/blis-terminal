@@ -3,6 +3,7 @@ fn main() {
         "active_shortcut",
         "execute_alias",
         "execute_appearance",
+        "execute_note",
         "execute_search",
         "execute_open_target",
         "exit_app",

@@ -6,6 +6,7 @@ mod appearance;
 mod config_file;
 mod desktop_open;
 mod lifecycle;
+mod notes;
 mod open_targets;
 mod search_settings;
 mod web_url;
@@ -49,6 +50,7 @@ fn main() {
             aliases::execute_alias,
             appearance::execute_appearance,
             exit_app,
+            notes::execute_note,
             open_targets::execute_open_target,
             search_settings::execute_search
         ])
@@ -64,6 +66,7 @@ fn main() {
         })
         .setup(move |app| {
             let config_directory = app.path().app_config_dir()?;
+            app.manage(notes::NoteStore::new(config_directory.join("notes")));
             app.manage(aliases::AliasStore::new(
                 config_directory.join("aliases.json"),
             ));

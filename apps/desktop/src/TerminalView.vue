@@ -10,10 +10,18 @@ import {
   useTemplateRef,
 } from 'vue'
 import BackgroundPicker from './BackgroundPicker.vue'
-import type { AliasOperation, Appearance, DesktopCommand } from './command-types'
+import NoteEditor from './NoteEditor.vue'
+import NoteRemovalDialog from './NoteRemovalDialog.vue'
+import type {
+  AliasOperation,
+  Appearance,
+  DesktopCommand,
+  NoteDraft,
+} from './command-types'
 import {
   executeAlias,
   executeAppearance,
+  executeNote,
   runDesktopCommand,
 } from './desktop-platform'
 import {
@@ -52,6 +60,11 @@ const appearance = ref<Appearance>()
 const pickerOpen = ref(false)
 const pickerBusy = ref(false)
 const pickerError = ref('')
+const activeNote = ref<NoteDraft>()
+const pendingNoteRemoval = ref<{ id: number; title: string }>()
+const noteDialogOpen = computed(() =>
+  Boolean(activeNote.value || pendingNoteRemoval.value),
+)
 const selectedTheme = computed(() =>
   appearance.value?.themes.find(({ id }) => id === appearance.value?.selected),
 )
@@ -69,6 +82,7 @@ const maxTranscript = 200
 const maxOutputLength = 8192
 const pendingOutput: Record<DesktopCommand['type'], string> = {
   alias: '正在处理命令别名…',
+  note: '正在处理笔记…',
   search: '正在处理搜索请求…',
   'open-target': '正在处理打开清单…',
   background: '正在读取背景设置…',
@@ -86,11 +100,47 @@ function focusInput() {
 }
 
 function focusOnBlankClick(event: MouseEvent) {
-  if (!pickerOpen.value && event.target === screen.value) focusInput()
+  if (
+    !noteDialogOpen.value &&
+    !pickerOpen.value &&
+    event.target === screen.value
+  )
+    focusInput()
 }
 
 function handleWindowFocus() {
-  if (!pickerOpen.value) focusInput()
+  if (!noteDialogOpen.value && !pickerOpen.value) focusInput()
+}
+
+function closeNote() {
+  activeNote.value = undefined
+  void nextTick(focusInput)
+}
+
+function finishNoteRemoval(confirmed: boolean) {
+  const removal = pendingNoteRemoval.value
+  if (!removal) return
+  pendingNoteRemoval.value = undefined
+  void nextTick(focusInput)
+  if (!confirmed) {
+    setCommandOutput(removal.id, '已取消删除笔记「' + removal.title + '」。')
+    return
+  }
+
+  setCommandOutput(removal.id, '正在删除笔记…')
+  aliasQueue = aliasQueue.then(async () => {
+    try {
+      const outcome = await executeNote({
+        action: 'remove',
+        title: removal.title,
+        confirmed: true,
+      })
+      if (outcome.type !== 'message') throw new Error('无法确认笔记已删除。')
+      setCommandOutput(removal.id, outcome.text)
+    } catch (error) {
+      setCommandOutput(removal.id, errorMessage(error), true)
+    }
+  })
 }
 
 function closePicker() {
@@ -176,7 +226,7 @@ function dispatchCommand(command: string, previousHistory: readonly string[]) {
   })
   if (desktopCommand) {
     const request = completeDesktopCommand(id, result)
-    if (result.type === 'alias') return request
+    if (result.type === 'alias' || result.type === 'note') return request
   }
 }
 
@@ -207,6 +257,25 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
   try {
     if (command.type === 'alias') {
       output = await completeAliasCommand(command.operation)
+    } else if (command.type === 'note') {
+      const operation = command.operation
+      if (
+        noteDialogOpen.value &&
+        (operation.action === 'new' ||
+          operation.action === 'edit' ||
+          operation.action === 'remove')
+      )
+        throw new Error('请先关闭当前笔记。')
+      const outcome = await executeNote(operation)
+      if (outcome.type === 'editor') {
+        activeNote.value = outcome
+        output = ''
+      } else if (outcome.type === 'confirm_remove') {
+        pendingNoteRemoval.value = { id, title: outcome.title }
+        output = '等待确认删除笔记「' + outcome.title + '」。'
+      } else {
+        output = outcome.text
+      }
     } else if (command.type === 'background') {
       const operation = command.operation
       appearance.value = await executeAppearance(operation)
@@ -239,6 +308,10 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
     failed = true
   }
 
+  setCommandOutput(id, output, failed)
+}
+
+function setCommandOutput(id: number, output: string, failed = false) {
   const entry = transcript.value.find((entry) => entry.id === id)
   if (entry) {
     entry.output = limitOutput(output)
@@ -275,7 +348,8 @@ function completeInput(event: KeyboardEvent) {
 }
 
 function handleInputKeydown(event: KeyboardEvent) {
-  if (pickerOpen.value || isCompositionKey(event)) return
+  if (noteDialogOpen.value || pickerOpen.value || isCompositionKey(event))
+    return
   if (isCommandCompletionKey(event)) {
     completeInput(event)
     return
@@ -319,6 +393,7 @@ async function hideTerminal() {
 }
 
 function handleKeydown(event: KeyboardEvent) {
+  if (noteDialogOpen.value) return
   if (pickerOpen.value) {
     if (shouldHideTerminal(event)) {
       event.preventDefault()
@@ -440,6 +515,13 @@ onUnmounted(() => {
       />
     </div>
     <p v-if="hideFailed" class="error" role="alert">隐藏窗口失败，请重试。</p>
+    <NoteEditor v-if="activeNote" :note="activeNote" @close="closeNote" />
+    <NoteRemovalDialog
+      v-if="pendingNoteRemoval"
+      :title="pendingNoteRemoval.title"
+      @cancel="finishNoteRemoval(false)"
+      @confirm="finishNoteRemoval(true)"
+    />
     <BackgroundPicker
       v-if="pickerOpen && appearance"
       :themes="appearance.themes"

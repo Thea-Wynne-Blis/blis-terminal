@@ -1,5 +1,24 @@
 export type OpenTargetKind = 'app' | 'folder' | 'file' | 'url'
 
+export type NoteFormat = 'md' | 'txt'
+
+export type NoteCommand =
+  | { action: 'list' }
+  | { action: 'new' | 'edit' | 'remove'; title: string }
+  | { action: 'export'; title: string; format: NoteFormat; output?: string }
+
+export type NoteOperation =
+  | NoteCommand
+  | { action: 'save'; title: string; content: string; create: boolean }
+  | { action: 'remove'; title: string; confirmed: true }
+
+export type NoteDraft = { title: string; content: string; create: boolean }
+
+export type NoteOutcome =
+  | ({ type: 'editor' } & NoteDraft)
+  | { type: 'confirm_remove'; title: string }
+  | { type: 'message'; text: string }
+
 export type AliasOperation =
   | { action: 'list' }
   | { action: 'add'; name: string; target: string }
@@ -51,6 +70,7 @@ export type Appearance = {
 
 export type DesktopCommand =
   | { type: 'alias'; operation: AliasOperation }
+  | { type: 'note'; operation: NoteCommand }
   | { type: 'search'; operation: SearchOperation }
   | { type: 'open-target'; operation: OpenOperation }
   | { type: 'background'; operation: AppearanceOperation }
