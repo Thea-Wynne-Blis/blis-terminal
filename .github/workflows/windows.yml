@@ -32,7 +32,7 @@ jobs:
           cargo clippy --locked --all-targets -- -D warnings
           cargo test --locked
       - name: Build Windows installer
-        run: pnpm tauri build -- --locked
+        run: pnpm bundle
       - uses: actions/upload-artifact@v4
         with:
           name: blis-terminal-windows-x64

@@ -107,9 +107,10 @@ pnpm build
 cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+pnpm bundle
 ```
 
-安装包输出在 `apps/desktop/src-tauri/target/release/bundle/nsis/`。
+`pnpm bundle` 会打包 Windows 安装包，输出在 `apps/desktop/src-tauri/target/release/bundle/nsis/`。
 
 ## 发版
 

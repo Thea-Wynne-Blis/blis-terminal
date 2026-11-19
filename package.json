@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "pnpm --filter @blis/desktop dev",
     "build": "pnpm --filter @blis/desktop build",
+    "bundle": "pnpm --filter @blis/desktop exec tauri build -- --locked",
     "tauri": "pnpm --filter @blis/desktop tauri",
     "lint": "eslint .",
     "format": "prettier --write .",
