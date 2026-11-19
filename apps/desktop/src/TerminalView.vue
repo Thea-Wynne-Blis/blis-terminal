@@ -10,8 +10,12 @@ import {
   useTemplateRef,
 } from 'vue'
 import BackgroundPicker from './BackgroundPicker.vue'
-import type { Appearance, DesktopCommand } from './command-types'
-import { executeAppearance, runDesktopCommand } from './desktop-platform'
+import type { AliasOperation, Appearance, DesktopCommand } from './command-types'
+import {
+  executeAlias,
+  executeAppearance,
+  runDesktopCommand,
+} from './desktop-platform'
 import {
   completeCommand,
   executeTerminalInput,
@@ -64,6 +68,7 @@ const maxHistory = 100
 const maxTranscript = 200
 const maxOutputLength = 8192
 const pendingOutput: Record<DesktopCommand['type'], string> = {
+  alias: '正在处理命令别名…',
   search: '正在处理搜索请求…',
   'open-target': '正在处理打开清单…',
   background: '正在读取背景设置…',
@@ -73,6 +78,8 @@ let nextEntry = 0
 let historyPosition: number | undefined
 let draft = ''
 let completion: CommandCompletion | undefined
+let aliases = new Map<string, string>()
+let aliasQueue = Promise.resolve()
 
 function focusInput() {
   input.value?.focus({ preventScroll: true })
@@ -133,46 +140,74 @@ function submitCommand() {
 
   line.value = ''
   historyPosition = undefined
-  const result = executeTerminalInput(command, history)
+  const previousHistory = [...history]
   history.push(command)
   if (history.length > maxHistory) history.shift()
 
+  // Expand commands after any preceding alias edits have been saved.
+  aliasQueue = aliasQueue.then(() => dispatchCommand(command, previousHistory))
+}
+
+function dispatchCommand(command: string, previousHistory: readonly string[]) {
+  const result = executeTerminalInput(command, previousHistory, aliases)
   if (result.type === 'clear') {
     clearTranscript()
-  } else {
-    const id = nextEntry++
-    const desktopCommand =
-      result.type === 'search' ||
-      result.type === 'open-target' ||
-      result.type === 'background' ||
-      result.type === 'exit'
-    const launchAlias =
-      result.type === 'open-target' && result.operation.action === 'launch'
-        ? result.operation.alias
-        : undefined
-    let output = desktopCommand ? pendingOutput[result.type] : result.text
-    if (launchAlias) output = `正在打开「${launchAlias}」…`
-    transcript.value.push({
-      id,
-      command,
-      output: limitOutput(output),
-      error: result.type === 'error',
-      collapsed: false,
-      launching: launchAlias !== undefined,
-    })
-    if (transcript.value.length > maxTranscript) transcript.value.shift()
-    if (desktopCommand) void completeDesktopCommand(id, result)
+    return
   }
+  const id = nextEntry++
+  const desktopCommand = 'operation' in result || result.type === 'exit'
+  const launchAlias =
+    result.type === 'open-target' && result.operation.action === 'launch'
+      ? result.operation.alias
+      : undefined
+  let output = desktopCommand ? pendingOutput[result.type] : result.text
+  if (launchAlias) output = '正在打开「' + launchAlias + '」…'
+  transcript.value.push({
+    id,
+    command,
+    output: limitOutput(output),
+    error: result.type === 'error',
+    collapsed: false,
+    launching: launchAlias !== undefined,
+  })
+  if (transcript.value.length > maxTranscript) transcript.value.shift()
   void nextTick(() => {
     if (screen.value) screen.value.scrollTop = screen.value.scrollHeight
   })
+  if (desktopCommand) {
+    const request = completeDesktopCommand(id, result)
+    if (result.type === 'alias') return request
+  }
+}
+
+async function refreshAliases(operation: AliasOperation) {
+  aliases = new Map(Object.entries(await executeAlias(operation)))
+  resetCompletion()
+}
+
+async function completeAliasCommand(operation: AliasOperation) {
+  await refreshAliases(operation)
+  switch (operation.action) {
+    case 'add':
+      return '已保存别名「' + operation.name + '」。'
+    case 'remove':
+      return '已移除别名「' + operation.name + '」。'
+    case 'list':
+      return (
+        [...aliases]
+          .map(([name, target]) => name + '  →  ' + target)
+          .join('\n') || '暂无命令别名。输入 help alias 查看添加方法。'
+      )
+  }
 }
 
 async function completeDesktopCommand(id: number, command: DesktopCommand) {
   let output: string
   let failed = false
   try {
-    if (command.type === 'background') {
+    if (command.type === 'alias') {
+      output = await completeAliasCommand(command.operation)
+    } else if (command.type === 'background') {
       const operation = command.operation
       appearance.value = await executeAppearance(operation)
       switch (operation.action) {
@@ -225,7 +260,12 @@ function completeInput(event: KeyboardEvent) {
     resetCompletion()
     return
   }
-  completion = completeCommand(line.value, field.selectionStart, completion)
+  completion = completeCommand(
+    line.value,
+    field.selectionStart,
+    completion,
+    aliases,
+  )
   if (!completion) return
 
   event.preventDefault()
@@ -310,6 +350,10 @@ onMounted(async () => {
   window.addEventListener('focus', handleWindowFocus)
   window.addEventListener('keydown', handleKeydown)
   if (!desktop) return
+
+  aliasQueue = refreshAliases({ action: 'list' }).catch((error) =>
+    console.error('Failed to load aliases', error),
+  )
 
   void executeAppearance({ action: 'get' })
     .then((settings) => {

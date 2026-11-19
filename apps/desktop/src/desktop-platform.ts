@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type {
+  AliasOperation,
   Appearance,
   AppearanceOperation,
   DesktopCommand,
@@ -33,6 +34,14 @@ const kindNames: Record<OpenTargetKind, string> = {
 let openQueue = Promise.resolve()
 let appearanceQueue = Promise.resolve()
 let searchQueue = Promise.resolve()
+
+export function executeAlias(
+  operation: AliasOperation,
+): Promise<Record<string, string>> {
+  if (!isTauri())
+    return Promise.reject(new Error('请在 Blis 桌面版中执行此命令。'))
+  return invoke('execute_alias', { operation })
+}
 
 export function executeAppearance(
   operation: AppearanceOperation,
@@ -89,7 +98,7 @@ async function executeOpenOperation(operation: OpenOperation): Promise<string> {
 }
 
 export async function runDesktopCommand(
-  command: Exclude<DesktopCommand, { type: 'background' }>,
+  command: Exclude<DesktopCommand, { type: 'alias' | 'background' }>,
 ): Promise<string> {
   if (!isTauri()) throw new Error('请在 Blis 桌面版中执行此命令。')
   switch (command.type) {

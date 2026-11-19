@@ -1,4 +1,5 @@
 import { version } from '../package.json'
+import { aliasDefinition, aliasKey } from './alias-command'
 import { backgroundDefinition } from './background-command'
 import type { CommandDefinition, CommandResult } from './command-types'
 import { openDefinition } from './open-command'
@@ -7,6 +8,7 @@ import { describeShortcuts } from './terminal-keyboard'
 
 export const terminalVersion = version
 const commandLine = /^(\s*)(\S+)(\s*)([\s\S]*)$/u
+const noAliases: ReadonlyMap<string, string> = new Map()
 
 const commands = new Map<string, CommandDefinition>([
   [
@@ -22,6 +24,7 @@ const commands = new Map<string, CommandDefinition>([
   ['search', searchDefinition],
   ['open', openDefinition],
   ['background', backgroundDefinition],
+  ['alias', aliasDefinition],
   [
     'shortcut',
     {
@@ -161,6 +164,7 @@ export function completeCommand(
   value: string,
   caret: number,
   previous?: CommandCompletion,
+  aliases = noAliases,
 ): CommandCompletion | undefined {
   if (previous?.cycle && previous.value === value && previous.caret === caret) {
     const { options, index } = previous.cycle
@@ -170,9 +174,9 @@ export function completeCommand(
   const [, leading, word, separator, args] = commandLine.exec(value) ?? []
   if (!word || caret !== leading.length + word.length) return undefined
 
-  const key = word.toLowerCase()
-  const names = Array.from(commands.keys()).filter((name) =>
-    name.startsWith(key),
+  const key = aliasKey(word)
+  const names = [...new Set([...commands.keys(), ...aliases.keys()])].filter(
+    (name) => name.startsWith(key),
   )
   if (names.length) {
     return selectCompletion(
@@ -185,12 +189,37 @@ export function completeCommand(
 export function executeTerminalInput(
   line: string,
   history: readonly string[],
+  aliases = noAliases,
 ): CommandResult {
-  const [, , name = '', , args = ''] = commandLine.exec(line) ?? []
-  const key = name.toLowerCase()
+  let parsed = commandLine.exec(line)
+  const name = parsed?.[2] ?? ''
+  const target =
+    !commands.has(name.toLowerCase()) && aliases.get(aliasKey(name))
+  if (target) {
+    const args = parsed?.[4]
+    parsed = commandLine.exec(args ? target + ' ' + args : target)
+  }
+
+  const [, , commandName = '', , args = ''] = parsed ?? []
+  const key = commandName.toLowerCase()
   const command = commands.get(key)
   if (!command) return unknownCommand(name)
 
   if (args.trim() === '--help' || args.trim() === '-h') return showHelp(key)
-  return command.run(args, history)
+  const result = command.run(args, history)
+  if (result.type === 'alias' && result.operation.action === 'add') {
+    const { name, target } = result.operation
+    if (commands.has(name.toLowerCase()))
+      return {
+        type: 'error',
+        text: '「' + name + '」是内置命令，请换一个别名。',
+      }
+    const targetName = commandLine.exec(target)?.[2].toLowerCase()
+    if (!targetName || !commands.has(targetName))
+      return {
+        type: 'error',
+        text: '请选择一个内置 Blis 命令作为别名的目标。输入 help 查看。',
+      }
+  }
+  return result
 }

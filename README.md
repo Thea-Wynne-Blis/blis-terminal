@@ -8,6 +8,18 @@
 
 新增命令时实现 `CommandDefinition`，再加入 `apps/desktop/src/terminal-commands.ts` 的命令表。
 
+## 命令别名
+
+```text
+alias add bilibili search bilibili
+bilibili csgo
+alias list
+alias remove bilibili
+help alias
+```
+
+`bilibili csgo` 会执行 `search bilibili csgo`。别名支持中文和 Tab 补全，目标可使用任意内置 Blis 命令。附加参数接在目标命令后面。别名保存在 `%APPDATA%/dev.blis.terminal/aliases.json`，重启后仍可使用。
+
 ## 搜索与打开网页
 
 ```text

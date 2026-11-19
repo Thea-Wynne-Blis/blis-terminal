@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod aliases;
 mod app_start;
 mod appearance;
 mod config_file;
@@ -45,6 +46,7 @@ fn main() {
         .manage(Mutex::new(()))
         .invoke_handler(tauri::generate_handler![
             active_shortcut,
+            aliases::execute_alias,
             appearance::execute_appearance,
             exit_app,
             open_targets::execute_open_target,
@@ -62,6 +64,9 @@ fn main() {
         })
         .setup(move |app| {
             let config_directory = app.path().app_config_dir()?;
+            app.manage(aliases::AliasStore::new(
+                config_directory.join("aliases.json"),
+            ));
             app.manage(open_targets::OpenTargets::new(
                 config_directory.join("open-targets.json"),
             ));

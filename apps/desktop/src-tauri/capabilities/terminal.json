@@ -1,10 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "terminal",
-  "description": "Read the hotkey, manage saved open targets and search settings, hide the window, and exit Blis.",
+  "description": "Read the hotkey, manage aliases, open targets and search settings, hide the window, and exit Blis.",
   "windows": ["terminal"],
   "permissions": [
     "allow-active-shortcut",
+    "allow-execute-alias",
     "allow-execute-appearance",
     "allow-execute-open-target",
     "allow-exit-app",

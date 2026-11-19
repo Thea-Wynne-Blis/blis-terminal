@@ -10,6 +10,7 @@ describe('terminal commands', () => {
     'help',
     'search',
     'open',
+    'alias',
     'shortcut',
     'exit',
     'echo',
@@ -80,6 +81,60 @@ describe('terminal commands', () => {
       type: 'error',
       text: expect.stringContaining('help'),
     })
+  })
+})
+
+describe('command aliases', () => {
+  const aliases = new Map([
+    ['bilibili', 'search bilibili'],
+    ['项目', 'open workspace'],
+    ['问候', 'echo 你好'],
+  ])
+
+  it('keeps quoted arguments and backslashes when saving the target', () => {
+    const command = 'open add docs --folder "C:\\My Files\\docs"'
+    expect(executeTerminalInput('alias add DOCS ' + command, [])).toEqual({
+      type: 'alias',
+      operation: { action: 'add', name: 'docs', target: command },
+    })
+  })
+
+  it('expands aliases through the existing dispatcher and appends arguments', () => {
+    expect(
+      executeTerminalInput('BILIBILI "csgo 中文" -b chrome', [], aliases),
+    ).toEqual(executeTerminalInput('search bilibili "csgo 中文" -b chrome', []))
+    expect(executeTerminalInput('项目', [], aliases)).toEqual(
+      executeTerminalInput('open workspace', []),
+    )
+    expect(executeTerminalInput('问候  世界', [], aliases)).toEqual({
+      type: 'text',
+      text: '你好 世界',
+    })
+    expect(completeCommand('bi', 2, undefined, aliases)).toMatchObject({
+      value: 'bilibili ',
+      caret: 9,
+    })
+  })
+
+  it('lists and removes aliases and reserves built-in command names', () => {
+    expect(executeTerminalInput('alias list', [])).toEqual({
+      type: 'alias',
+      operation: { action: 'list' },
+    })
+    expect(executeTerminalInput('alias remove BILIBILI', [])).toEqual({
+      type: 'alias',
+      operation: { action: 'remove', name: 'bilibili' },
+    })
+    for (const input of [
+      'alias add open echo hello',
+      'alias add cycle bilibili',
+      'alias add missing',
+      'alias remove bilibili extra',
+    ]) {
+      expect(executeTerminalInput(input, [], aliases)).toMatchObject({
+        type: 'error',
+      })
+    }
   })
 })
 

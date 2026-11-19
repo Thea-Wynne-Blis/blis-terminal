@@ -1,5 +1,10 @@
 export type OpenTargetKind = 'app' | 'folder' | 'file' | 'url'
 
+export type AliasOperation =
+  | { action: 'list' }
+  | { action: 'add'; name: string; target: string }
+  | { action: 'remove'; name: string }
+
 export type OpenOperation =
   | { action: 'add'; alias: string; kind: OpenTargetKind; target: string }
   | { action: 'list' }
@@ -45,6 +50,7 @@ export type Appearance = {
 }
 
 export type DesktopCommand =
+  | { type: 'alias'; operation: AliasOperation }
   | { type: 'search'; operation: SearchOperation }
   | { type: 'open-target'; operation: OpenOperation }
   | { type: 'background'; operation: AppearanceOperation }

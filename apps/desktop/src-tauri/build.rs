@@ -1,6 +1,7 @@
 fn main() {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "active_shortcut",
+        "execute_alias",
         "execute_appearance",
         "execute_search",
         "execute_open_target",
