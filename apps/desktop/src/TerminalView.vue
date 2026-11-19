@@ -25,6 +25,12 @@ import {
   runDesktopCommand,
 } from './desktop-platform'
 import {
+  cyclePathCompletion,
+  pathContext,
+  startPathCompletion,
+  type PathCompletion,
+} from './path-completion'
+import {
   completeCommand,
   executeTerminalInput,
   terminalVersion,
@@ -97,6 +103,8 @@ let nextEntry = 0
 let historyPosition: number | undefined
 let draft = ''
 let completion: CommandCompletion | undefined
+let pathCompletion: PathCompletion | undefined
+let pathRequest = 0
 let aliases = new Map<string, string>()
 let commandQueue = Promise.resolve()
 
@@ -369,6 +377,16 @@ function setCommandOutput(id: number, output: string, failed = false) {
 
 function resetCompletion() {
   completion = undefined
+  pathCompletion = undefined
+  pathRequest++
+}
+
+function applyCompletion(
+  field: HTMLInputElement,
+  completed: { value: string; caret: number },
+) {
+  line.value = completed.value
+  void nextTick(() => field.setSelectionRange(completed.caret, completed.caret))
 }
 
 function completeInput(event: KeyboardEvent) {
@@ -380,18 +398,45 @@ function completeInput(event: KeyboardEvent) {
     resetCompletion()
     return
   }
-  completion = completeCommand(
-    line.value,
-    field.selectionStart,
-    completion,
-    aliases,
-  )
-  if (!completion) return
-
+  const value = line.value
+  const caret = field.selectionStart
+  const cycled = cyclePathCompletion(pathCompletion, value, caret)
+  if (cycled) {
+    event.preventDefault()
+    pathCompletion = cycled
+    applyCompletion(field, cycled)
+    return
+  }
+  completion = completeCommand(value, caret, completion, aliases)
+  if (completion) {
+    event.preventDefault()
+    applyCompletion(field, completion)
+    return
+  }
+  const context = desktop ? pathContext(value, caret) : undefined
+  if (!context) return
   event.preventDefault()
-  const { value, caret } = completion
-  line.value = value
-  void nextTick(() => field.setSelectionRange(caret, caret))
+  const request = ++pathRequest
+  void commandQueue
+    .then(() =>
+      executeDirectory({
+        action: 'complete_path',
+        prefix: context.prefix,
+        directories_only: context.directoriesOnly,
+      }),
+    )
+    .then((outcome) => {
+      if (
+        request !== pathRequest ||
+        line.value !== value ||
+        field.selectionStart !== caret ||
+        field.selectionEnd !== caret
+      )
+        return
+      pathCompletion = startPathCompletion(context, outcome.candidates ?? [])
+      if (pathCompletion) applyCompletion(field, pathCompletion)
+    })
+    .catch((error) => console.error('Failed to complete path', error))
 }
 
 function handleInputKeydown(event: KeyboardEvent) {

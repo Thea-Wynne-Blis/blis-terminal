@@ -17,7 +17,7 @@ export function describeShortcuts(): string {
   const shortcuts = [
     ...outputShortcuts,
     ...historyShortcuts,
-    { label: 'Tab', description: '补全命令名，多项匹配时循环切换' },
+    { label: 'Tab', description: '补全命令名和文件路径，多项匹配时循环切换' },
     { label: 'Ctrl + C', description: '复制选中的文本' },
     { label: 'Ctrl + V', description: '粘贴到输入框' },
     { label: 'Alt + Space', description: '唤出或隐藏终端窗口' },

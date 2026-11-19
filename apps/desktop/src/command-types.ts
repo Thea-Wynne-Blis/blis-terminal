@@ -4,16 +4,24 @@ export type DirectoryOperation =
   | { action: 'pwd' | 'open_current' }
   | { action: 'cd'; path?: string }
   | { action: 'ls'; path?: string }
+  | {
+      action: 'complete_path'
+      prefix: string
+      directories_only: boolean
+    }
   | { action: 'mkdir'; path: string }
   | { action: 'copy'; source: string; destination: string; recursive: boolean }
   | { action: 'move'; source: string; destination: string }
   | { action: 'remove'; path: string; recursive: boolean }
   | { action: 'finish_remove'; id: number; confirmed: boolean }
 
+export type PathCandidate = { path: string; directory: boolean }
+
 export type DirectoryOutcome = {
   directory: string
   text: string
   removal?: { id: number; path: string }
+  candidates?: PathCandidate[]
 }
 
 export type NoteFormat = 'md' | 'txt'

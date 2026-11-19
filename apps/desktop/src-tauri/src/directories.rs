@@ -7,7 +7,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 
-use crate::{desktop_open::open_with_system, file_operations as files};
+use crate::{
+    desktop_open::open_with_system,
+    directory_listing::{self, is_hidden, PathCandidate},
+    file_operations as files,
+};
 
 #[derive(Deserialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
@@ -18,6 +22,10 @@ pub enum DirectoryOperation {
     },
     Ls {
         path: Option<String>,
+    },
+    CompletePath {
+        prefix: String,
+        directories_only: bool,
     },
     OpenCurrent,
     Mkdir {
@@ -54,6 +62,8 @@ pub struct DirectoryOutcome {
     text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     removal: Option<RemovalRequest>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    candidates: Option<Vec<PathCandidate>>,
 }
 
 struct DirectorySession {
@@ -83,6 +93,7 @@ impl DirectoryStore {
     fn execute(&self, operation: DirectoryOperation) -> Result<DirectoryOutcome, String> {
         let mut session = self.session.lock().map_err(|_| "当前目录暂时不可用。")?;
         let mut removal = None;
+        let mut candidates = None;
         let text = match operation {
             DirectoryOperation::Pwd => session.current.display().to_string(),
             DirectoryOperation::Cd { path } => {
@@ -94,6 +105,14 @@ impl DirectoryStore {
                 let target = self.resolve(&session.current, path.as_deref().unwrap_or("."))?;
                 let target = require_directory(&target)?;
                 list_directory(&target).map_err(|error| directory_error(&target, error))?
+            }
+            DirectoryOperation::CompletePath {
+                prefix,
+                directories_only,
+            } => {
+                candidates =
+                    Some(self.complete_path(&session.current, &prefix, directories_only)?);
+                String::new()
             }
             DirectoryOperation::OpenCurrent => {
                 let target = require_directory(&session.current)?;
@@ -154,7 +173,42 @@ impl DirectoryStore {
             directory: session.current.display().to_string(),
             text,
             removal,
+            candidates,
         })
+    }
+
+    fn complete_path(
+        &self,
+        current: &Path,
+        input: &str,
+        directories_only: bool,
+    ) -> Result<Vec<PathCandidate>, String> {
+        if input.chars().any(char::is_control) {
+            return Ok(Vec::new());
+        }
+        let last_separator = input.rfind(std::path::is_separator);
+        let separator = last_separator.map_or(std::path::MAIN_SEPARATOR, |index| {
+            input.as_bytes()[index] as char
+        });
+        let drive = cfg!(windows)
+            && matches!(input.as_bytes(), [letter, b':'] if letter.is_ascii_alphabetic());
+        if drive || matches!(input, "." | ".." | "~") {
+            let path = self.resolve(current, input)?;
+            if path.is_dir() {
+                return Ok(vec![PathCandidate {
+                    path: format!("{input}{separator}"),
+                    directory: true,
+                }]);
+            }
+            return Ok(Vec::new());
+        }
+        let (prefix, name) = input.split_at(last_separator.map_or(0, |index| index + 1));
+        let target = self.resolve(current, if prefix.is_empty() { "." } else { prefix })?;
+        if !target.is_dir() {
+            return Ok(Vec::new());
+        }
+        directory_listing::complete(&target, prefix, name, separator, directories_only)
+            .map_err(|error| directory_error(&target, error))
     }
 
     fn resolve(&self, current: &Path, input: &str) -> Result<PathBuf, String> {
@@ -206,18 +260,6 @@ fn list_directory(path: &Path) -> io::Result<String> {
         return Ok("目录中没有可显示的项目。".to_owned());
     }
     Ok(names.join("\n"))
-}
-
-#[cfg(windows)]
-fn is_hidden(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
-    metadata.file_attributes() & FILE_ATTRIBUTE_HIDDEN != 0
-}
-
-#[cfg(not(windows))]
-fn is_hidden(_: &fs::Metadata) -> bool {
-    false
 }
 
 fn require_directory(path: &Path) -> Result<PathBuf, String> {

@@ -5,6 +5,8 @@ import type {
   DirectoryOperation,
 } from './command-types'
 
+const pathTabHelp = '输入部分路径后按 Tab 补全，可在多项匹配之间切换。'
+
 export const pwdDefinition: CommandDefinition = {
   summary: '显示当前目录的绝对路径',
   usage: ['pwd'],
@@ -21,6 +23,7 @@ export const cdDefinition: CommandDefinition = {
   details: [
     '省略目录或输入 cd ~ 可回到当前 Windows 用户目录。用 cd .. 返回上一级。',
     '可用跨盘绝对路径。目录名含空格时请加引号，支持反斜杠和正斜杠。',
+    '输入部分路径后按 Tab 补全目录名。',
   ],
   examples: ['cd ..', 'cd ~', 'cd "C:\\Program Files"', 'cd G:/'],
   run: changeDirectory,
@@ -32,6 +35,7 @@ export const lsDefinition: CommandDefinition = {
   details: [
     '默认列出当前目录。可传入相对路径或绝对路径，目录名含空格时请加引号。',
     '子目录以 / 结尾，隐藏项目默认省略。',
+    '输入部分路径后按 Tab 补全目录名。',
   ],
   examples: ['ls', 'ls ..', 'ls "C:\\Program Files"'],
   run: list,
@@ -40,7 +44,10 @@ export const lsDefinition: CommandDefinition = {
 export const mkdirDefinition: CommandDefinition = {
   summary: '新建目录',
   usage: ['mkdir [--] <目录>'],
-  details: ['父目录需要已存在。目标重名时会提示。路径含空格时请加引号。'],
+  details: [
+    '父目录需要已存在。目标重名时会提示。路径含空格时请加引号。',
+    pathTabHelp,
+  ],
   examples: ['mkdir "项目 备份"', 'mkdir "资料/项目 A"'],
   run: (input) => editFiles('mkdir', input),
 }
@@ -51,6 +58,7 @@ export const cpDefinition: CommandDefinition = {
   details: [
     '使用 -r 复制目录及其内容。目标是现有目录时，复制到该目录内。目标重名时会提示。',
     '路径含空格时请加引号。以短横线开头的路径可放在 -- 后面。',
+    pathTabHelp,
   ],
   examples: ['cp "项目计划.md" "计划 副本.md"', 'cp -r "项目资料" "备份"'],
   run: (input) => editFiles('cp', input),
@@ -62,6 +70,7 @@ export const mvDefinition: CommandDefinition = {
   details: [
     '目标是现有目录时，移入该目录。目标重名时会提示。路径含空格时请加引号。',
     '文件支持跨盘移动。移动目录到其他盘时，可先用 cp -r 复制，再回收原目录。',
+    pathTabHelp,
   ],
   examples: ['mv "计划 草稿.md" "项目计划.md"', 'mv "项目资料" "归档"'],
   run: (input) => editFiles('mv', input),
@@ -73,6 +82,7 @@ export const rmDefinition: CommandDefinition = {
   details: [
     '使用 -r 回收目录及其内容。输入后会显示完整路径，按 Esc 或选择取消可保留文件。',
     '回收站不可用时会报告错误并保留目标。路径含空格时请加引号。',
+    pathTabHelp,
   ],
   examples: ['rm "计划 副本.md"', 'rm -r "项目 备份"'],
   run: (input) => editFiles('rm', input),
