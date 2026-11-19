@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   completeCommand,
   executeTerminalInput,
@@ -11,6 +11,8 @@ describe('terminal commands', () => {
     'search',
     'open',
     'alias',
+    'calc',
+    'date',
     'shortcut',
     'exit',
     'echo',
@@ -82,6 +84,55 @@ describe('terminal commands', () => {
       text: expect.stringContaining('help'),
     })
   })
+})
+
+describe('utility commands', () => {
+  it.each([
+    ['calc 12 + 3 * (8 - 2)', '30'],
+    ['calc -(2.5 + .5) / 2', '-1.5'],
+    ['calc 0.1 + 0.2', '0.3'],
+  ])('evaluates %s', (input, text) => {
+    expect(executeTerminalInput(input, [])).toEqual({ type: 'text', text })
+  })
+
+  it.each(['calc 1 / 0', 'calc (5 + 2', 'calc 2 * * 3', 'calc console.log(1)'])(
+    'rejects %s',
+    (input) =>
+      expect(executeTerminalInput(input, [])).toMatchObject({ type: 'error' }),
+  )
+
+  it('formats UTC and local ISO with the actual timezone offset', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date('2026-11-19T23:04:05Z'))
+      expect(executeTerminalInput('date -u', [])).toEqual({
+        type: 'text',
+        text: '2026-11-19 星期四 23:04:05 UTC',
+      })
+      expect(executeTerminalInput('date --utc --iso', [])).toEqual({
+        type: 'text',
+        text: '2026-11-19T23:04:05.000Z',
+      })
+      const local = executeTerminalInput('date --iso', [])
+      if (local.type !== 'text') throw new Error('Expected ISO output')
+      expect(local.text).toMatch(/[+-]\d{2}:\d{2}$/u)
+      expect(new Date(local.text).getTime()).toBe(Date.now())
+      expect(executeTerminalInput('date --bad', [])).toMatchObject({
+        type: 'error',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each([
+    ['ca', 'calc'],
+    ['da', 'date'],
+  ])('completes %s', (prefix, name) =>
+    expect(completeCommand(prefix, prefix.length)).toMatchObject({
+      value: name + ' ',
+    }),
+  )
 })
 
 describe('command aliases', () => {

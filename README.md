@@ -20,6 +20,16 @@ help alias
 
 `bilibili csgo` 会执行 `search bilibili csgo`。别名支持中文和 Tab 补全，目标可使用任意内置 Blis 命令。附加参数接在目标命令后面。别名保存在 `%APPDATA%/dev.blis.terminal/aliases.json`，重启后仍可使用。
 
+## 计算与时间
+
+```text
+calc 12 + 3 * (8 - 2)
+date
+date -u --iso
+```
+
+`calc` 支持加减乘除、括号、正负号和小数。`date` 显示本机时间，`-u` 显示 UTC，`--iso` 输出 ISO 8601 格式。
+
 ## 搜索与打开网页
 
 ```text
