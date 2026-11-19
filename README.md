@@ -1,142 +1,101 @@
 # Blis Terminal
 
-面向 Windows 10/11 x64 的个人命令终端。启动后在 `blis>` 提示符输入 `help`，可查看当前的内置命令。使用上下方向键浏览本次会话的输入历史。
+一款 Windows 上的个人命令终端：常驻托盘，`Alt+Space` 随时唤出，在 `blis>` 提示符下管理目录、文件、笔记，搜索网页，保存常用应用。
 
-每条命令都可以用 `help <命令>`、`<命令> --help` 或 `<命令> -h` 查看详细用法和示例。命令的说明与执行函数一起注册，命令列表和详细帮助从同一份定义生成。
+内置命令：`help` `search` `open` `pwd` `cd` `ls` `mkdir` `cp` `mv` `rm` `background` `alias` `calc` `date` `note` `history` `clear` `version` `shortcut` `echo` `exit`。
+每条命令都支持 `help <命令>` 或 `<命令> --help`。
 
-输入 `shortcut` 可查看快捷键。输入命令名的前几个字母后按 `Tab` 补全，例如 `se` 补成 `search`。有多个匹配时连续按 `Tab` 可切换。`Ctrl+L` 清屏，`Ctrl+O` 折叠或展开已执行命令的输出。可用鼠标拖选屏幕上的命令或 `history` 输出，再按 `Ctrl+C` 复制。上下方向键可取回历史命令继续编辑。
+## 技术栈
 
-新增命令时实现 `CommandDefinition`，再加入 `apps/desktop/src/terminal-commands.ts` 的命令表。
+| 层       | 选型                               |
+| -------- | ---------------------------------- |
+| 界面     | Vue 3 + TypeScript + Vite          |
+| 桌面外壳 | Tauri 2（Rust）+ 系统 WebView2     |
+| 工程     | pnpm workspace、ESLint、Prettier   |
+| 测试     | Vitest（前端）、cargo test（后端） |
 
-## 浏览目录
+## 架构
 
-```text
-pwd
-cd "G:\web-ai-code\blis-terminal"
-ls
-ls -al
-ls ..
-open .
-cd ~
+一句话概括：**前端管"命令怎么写"，Rust 管"系统怎么干"。**
+
+```
+Vue 3 + WebView2
+  TerminalView.vue       终端外壳：输入、历史、输出、弹窗
+  terminal-commands.ts   命令表、别名展开、Tab 补全
+  *-command.ts           各命令的参数解析 → CommandResult
+  desktop-platform.ts    IPC 桥
+          │
+          │  Tauri invoke
+          ▼
+Rust + Tauri 2
+  main.rs                插件与命令注册、状态装配
+  lifecycle.rs           托盘、全局快捷键、窗口显隐
+  directories.rs / notes.rs / aliases.rs / …   业务实现
+  %APPDATA%/dev.blis.terminal/                 JSON 与笔记存储
 ```
 
-提示符显示当前目录。`cd` 支持跨盘、相对路径和带空格的路径，路径含空格时请加引号。输入 `cd` 或 `cd ~` 可回到 Windows 用户目录。`ls` 默认列出当前位置，也可指定另一个目录。`open .` 用资源管理器打开当前目录。隐藏窗口后再唤出会保留当前位置，重启 Blis 后从 Windows 用户目录开始。输入 `help pwd`、`help cd`、`help ls` 或 `help open` 可查看用法。
+### 一条命令的执行路径
 
-输入路径开头后按 Tab 可以补全，例如输入 `cd "C:\Pro` 后按 Tab。有多个匹配时会先补共同前缀，再按 Tab 可切换。`ls -a` 显示隐藏项目，`ls -l` 显示类型、字节数和修改时间，两项可以写成 `ls -al`。
+以 `mkdir "项目 备份"` 为例：
 
-## 管理文件和目录
+1. 回车后 `TerminalView.vue` 的 `submitCommand` 调用 `executeTerminalInput`
+2. `terminal-commands.ts` 查命令表，命中 `mkdir`，把原始参数交给它的 `run`
+3. `run` 解析参数，返回 `CommandResult`：
+   - `{ type: 'text' | 'error' }`、`{ type: 'clear' }` —— 前端自己就能处理
+   - `{ type: 'directory', operation }` —— 需要系统能力
+4. `completeDesktopCommand` 经 `desktop-platform.ts` 发出 `invoke('execute_directory', …)`
+5. Rust 执行真实的文件操作，返回 `DirectoryOutcome`
+6. 结果写回 transcript，渲染到屏幕
 
-```text
-mkdir "项目 备份"
-cp "项目计划.md" "项目 备份"
-cp -r "项目资料" "资料 副本"
-mv "计划 草稿.md" "项目计划.md"
-rm "资料 副本/旧文件.txt"
-rm -r "项目 备份"
-```
+### 几个设计取舍
 
-路径以当前目录为起点，含空格时请加引号。`cp` 和 `mv` 的目标是现有目录时，会放到该目录内。重名时会提示。`rm` 会显示完整路径并要求确认，再将目标送入 Windows 回收站。回收失败时会提示，输入 `help rm` 可查看用法。
+- **命令定义即文档**：`CommandDefinition` 把 `summary` / `usage` / `examples` / `run` 放在一起，`help` 和 Tab 补全都从同一张表生成，不会出现"文档忘了改"。
+- **能力显式化**：前端不直接碰文件系统，只产生 `command-types.ts` 里的 operation 枚举；这份类型就是前后端唯一的契约。
+- **状态集中在 Rust**：当前目录、别名、笔记、搜索站点、背景设置都在后端，重启后自然恢复。
+- **进程常驻**：单实例 + 托盘 + 全局快捷键；关闭按钮只是隐藏窗口，再次唤回复用同一个窗口，输入不丢。
+- **收窄权限**：发布页面启用 CSP；`capabilities/terminal.json` 用白名单只放开列出的业务命令，没有引入任意 Shell 或文件系统插件。
 
-## 命令别名
-
-```text
-alias add bilibili search bilibili
-bilibili csgo
-alias list
-alias remove bilibili
-help alias
-```
-
-`bilibili csgo` 会执行 `search bilibili csgo`。别名支持中文和 Tab 补全，目标可使用任意内置 Blis 命令。附加参数接在目标命令后面。别名保存在 `%APPDATA%/dev.blis.terminal/aliases.json`，重启后仍可使用。
-
-## 计算、时间和笔记
+## 项目结构
 
 ```text
-calc 12 + 3 * (8 - 2)
-date
-date -u --iso
-note new "项目计划"
-note edit "项目计划"
-note list
-note remove "项目计划"
-note export "项目计划" -f md
-note export "项目计划" --format txt -o "D:/笔记/项目计划.txt"
+blis-terminal/
+├─ apps/desktop/
+│  ├─ src/                      Vue 前端
+│  │  ├─ TerminalView.vue       终端外壳：输入、历史、输出、弹窗
+│  │  ├─ terminal-commands.ts   命令表、解析入口、补全
+│  │  ├─ *-command.ts           各命令的参数解析（directory / search / note …）
+│  │  ├─ desktop-platform.ts    IPC 桥
+│  │  ├─ command-types.ts       前后端共享的 operation 契约
+│  │  ├─ terminal-keyboard.ts   快捷键与输入历史
+│  │  └─ *.test.ts              Vitest 单测
+│  └─ src-tauri/                Rust 后端
+│     ├─ src/main.rs            插件、命令注册、状态装配
+│     ├─ src/lifecycle.rs       托盘、全局快捷键、窗口生命周期
+│     ├─ src/directories.rs     目录与路径操作
+│     ├─ src/file_operations.rs mkdir / cp / mv / rm（回收站）
+│     ├─ src/notes.rs           笔记读写与导出
+│     ├─ src/aliases.rs         命令别名
+│     ├─ src/search_settings.rs 搜索站点与浏览器
+│     ├─ src/appearance.rs      背景主题与不透明度
+│     └─ tauri.conf.json        窗口、CSP、NSIS 打包配置
+├─ docs/phase-0.md              架构决策与实测记录
+├─ scripts/                     内存测量脚本
+└─ .github/workflows/windows.yml
 ```
 
-`calc` 支持加减乘除、括号、正负号和小数。`date` 显示本机时间，`-u` 显示 UTC，`--iso` 输出 ISO 8601 格式。
+## 本地开发
 
-在笔记编辑器中按 `Ctrl+S` 保存。笔记以 Markdown 文件保存在当前 Windows 用户的 `%APPDATA%/dev.blis.terminal/notes/`。`note remove` 会弹出确认窗口。选择取消或按 Esc 会保留笔记。默认导出到系统「文档」里的 `Blis Notes` 文件夹。使用 `-o` 或 `--out` 可指定其他绝对文件路径，请选择已存在的目录。导出时会保留已有的同名文件。输入 `help calc`、`help date` 或 `help note` 可查看详细说明。
-
-## 搜索与打开网页
-
-```text
-search Rust 入门教程
-search bilibili csgo
-search -s github "vue terminal"
-search --site zhihu -b chrome "Windows 托盘"
-search https://github.com/liyupi/yuindex
-
-search browser list
-search browser default chrome
-search browser add edge --app "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
-search browser default system
-search browser remove edge
-
-search site list
-search site add demo -t "https://example.com/search?q={query}"
-search site remove demo
-```
-
-省略站点时使用百度。预置百度、Bing、Google、GitHub、Bilibili 和知乎。自定义站点与浏览器别名不区分英文字母大小写。`-s` 与 `--site` 选站点，`-b` 与 `--browser` 临时选浏览器。`--` 之后按字面搜索，例如 `search -- bilibili` 会在百度搜索 bilibili。
-
-Blis 初始跟随 Windows 默认浏览器，并自动登记安装在标准位置的 Chrome。`search browser default chrome` 将 Chrome 设为 Blis 内默认。`search site add` 使用 `-t` 或 `--template` 指定 HTTP(S) 模板，查询参数中需要有一个完整的 `{query}` 值。自定义设置保存在 `%APPDATA%/dev.blis.terminal/search-settings.json`，重启后可继续使用。输入 `help search`、`search site --help` 或 `search browser --help` 查看说明。
-
-## 保存常用打开目标
-
-```text
-open add vscode --app "D:/Apps/Microsoft VS Code/Code.exe"
-open add 项目 --folder "G:/web-ai-code/blis-terminal"
-open add 报告 --file "D:/Documents/报告.pdf"
-open add github --url https://github.com
-open vscode
-open list
-open remove 报告
-help open
-```
-
-将示例路径替换为自己的绝对路径，含空格时加引号。别名可用中文，英文字母不区分大小写。同名目标可先移除再添加。`open remove` 只删除清单记录。清单保存于 `%APPDATA%/dev.blis.terminal/open-targets.json`，重启后仍可使用。
-
-`open <别名>` 在等待打开时显示进度指示。Windows 应用检测到可见窗口后显示「已打开」。启动器提前退出或 8 秒内还未检测到窗口时，会显示已知的启动状态。文件、文件夹和网址会提示已交给系统打开。
-
-## 背景设置
-
-```text
-background
-background add 夜景 --image "D:/壁纸/夜景.jpg"
-background add 海蓝 --color #172942
-background opacity 65
-background remove 夜景
-background reset
-help background
-```
-
-用 `background` 打开菜单，按 `↑`、`↓` 选择，按 Enter 应用，按 Esc 关闭。深色和亮色始终保留。自定义背景、当前选择和不透明度会保存在用户配置目录。不透明度 0 为完全透明，100 为完全不透明，文字的不透明度保持 100%。重置恢复深色和 100% 不透明度，自定义背景仍可选择。
-
-## 本地运行
-
-使用 `.node-version` 中的 Node.js、`package.json` 中的 pnpm 和 `rust-toolchain.toml` 中的 Rust。Windows 需要带有「使用 C++ 的桌面开发」工作负载的 Microsoft C++ Build Tools，以及 WebView2 Runtime。[Tauri 环境要求](https://v2.tauri.app/start/prerequisites/)
+需要 Node.js（见 `.node-version`）、pnpm 11、Rust（见 `rust-toolchain.toml`），以及带「使用 C++ 的桌面开发」工作负载的 Build Tools 和 WebView2 Runtime，详见 [Tauri 环境要求](https://v2.tauri.app/start/prerequisites/)。
 
 ```powershell
 npm install --global pnpm@11.25.0
-pnpm install --frozen-lockfile
+pnpm install
 pnpm tauri dev
 ```
 
-- 默认全局切换键是 `Alt+Space`，隐藏时唤出，显示时隐藏。注册失败时尝试 `Alt+Shift+Space`，窗口会显示实际生效的快捷键。两个都不可用时可单击托盘图标。
-- 首次打开时，窗口在鼠标所在显示器的可用区域内居中，默认约占 50% 宽、63% 高。可拖拽窗口边缘或角落调整大小，也可以最大化。隐藏后重新唤醒会保留当前尺寸。
-- 窗口关闭按钮会将窗口隐藏到托盘。再次运行同一程序会唤醒原实例。输入 `exit` 或选择托盘菜单中的「退出」会结束进程，输入 `help exit` 可查看说明。
-- 直接启动 Release 可执行文件时，可加 `--background` 验证首次启动只初始化托盘和快捷键。第一次唤醒才创建窗口，隐藏后复用窗口并保留输入。
-- `pnpm dev` 启动浏览器预览，用于检查布局。桌面行为通过 `pnpm tauri dev` 或 Release 可执行文件验证。
+只想调界面可以用 `pnpm dev` 在浏览器里预览；托盘、快捷键、文件系统等能力需要桌面版。
+
+快捷键：`Alt+Space` 唤出/隐藏（冲突时退到 `Alt+Shift+Space`），`Tab` 补全，`Ctrl+L` 清屏，`Ctrl+O` 折叠输出，`Esc` 关闭弹窗。
 
 ## 检查与构建
 
@@ -148,7 +107,21 @@ pnpm build
 cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
-pnpm tauri build -- --locked
 ```
 
-NSIS 安装器输出在 `apps/desktop/src-tauri/target/release/bundle/nsis/`。本地交付的可执行文件和安装器可保存在 `release/`。如已清理本地依赖，开发前先运行 `pnpm install --frozen-lockfile`。构建依赖和验收方法见 [Phase 0 验证记录](docs/phase-0.md)。
+安装包输出在 `apps/desktop/src-tauri/target/release/bundle/nsis/`。
+
+## 发版
+
+推一个 `v*` tag 即可，CI 会构建并在构建成功后自动创建 Release、上传安装包：
+
+```powershell
+git tag v0.2.1
+git push origin v0.2.1
+```
+
+普通分支推送只跑检查与构建，不会发版。更多背景见 [Phase 0 验证记录](docs/phase-0.md)。
+
+## 许可证
+
+[Apache-2.0](LICENSE)
