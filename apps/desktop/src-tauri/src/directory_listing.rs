@@ -57,7 +57,7 @@ pub(crate) fn list(
         let name = name.replace('\r', "\\r").replace('\n', "\\n");
         rows.push(ListingEntry {
             name: format!("{name}{suffix}"),
-            bytes: (detailed && matches!(kind, EntryKind::File)).then(|| metadata.len()),
+            bytes: (detailed && matches!(kind, EntryKind::File)).then_some(metadata.len()),
             modified_ms: if detailed {
                 modified_ms(&metadata)
             } else {

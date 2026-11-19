@@ -60,7 +60,7 @@ impl Default for Settings {
 fn standard_chrome_path() -> Option<String> {
     let program_files = std::env::var_os("ProgramFiles")?;
     let path = PathBuf::from(program_files).join("Google/Chrome/Application/chrome.exe");
-    path.is_file().then(|| path.to_string_lossy().into_owned())
+    path.is_file().then_some(path.to_string_lossy().into_owned())
 }
 
 #[derive(Deserialize)]
