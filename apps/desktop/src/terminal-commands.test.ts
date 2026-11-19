@@ -102,6 +102,12 @@ describe('directory commands', () => {
     ['cd ..', { action: 'cd', path: '..' }],
     ['cd ~', { action: 'cd', path: '~' }],
     ['ls', { action: 'ls' }],
+    ['ls -al', { action: 'ls', all: true, detailed: true }],
+    [
+      'ls -l -a "G:\\项目 文件"',
+      { action: 'ls', path: 'G:\\项目 文件', all: true, detailed: true },
+    ],
+    ['ls -a -- -目录', { action: 'ls', path: '-目录', all: true }],
     ['ls "..\\项目 文件"', { action: 'ls', path: '..\\项目 文件' }],
     ['open .', { action: 'open_current' }],
   ])('routes %s to the directory session', (input, operation) => {

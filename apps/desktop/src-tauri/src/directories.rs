@@ -9,7 +9,7 @@ use tauri::{AppHandle, Manager};
 
 use crate::{
     desktop_open::open_with_system,
-    directory_listing::{self, is_hidden, PathCandidate},
+    directory_listing::{self, ListingEntry, PathCandidate},
     file_operations as files,
 };
 
@@ -22,10 +22,15 @@ pub enum DirectoryOperation {
     },
     Ls {
         path: Option<String>,
+        #[serde(default)]
+        all: bool,
+        #[serde(default)]
+        detailed: bool,
     },
     CompletePath {
         prefix: String,
         directories_only: bool,
+        all: bool,
     },
     OpenCurrent,
     Mkdir {
@@ -63,6 +68,8 @@ pub struct DirectoryOutcome {
     #[serde(skip_serializing_if = "Option::is_none")]
     removal: Option<RemovalRequest>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    listing: Option<Vec<ListingEntry>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     candidates: Option<Vec<PathCandidate>>,
 }
 
@@ -93,6 +100,7 @@ impl DirectoryStore {
     fn execute(&self, operation: DirectoryOperation) -> Result<DirectoryOutcome, String> {
         let mut session = self.session.lock().map_err(|_| "当前目录暂时不可用。")?;
         let mut removal = None;
+        let mut listing = None;
         let mut candidates = None;
         let text = match operation {
             DirectoryOperation::Pwd => session.current.display().to_string(),
@@ -101,17 +109,25 @@ impl DirectoryStore {
                 session.current = require_directory(&destination)?;
                 String::new()
             }
-            DirectoryOperation::Ls { path } => {
+            DirectoryOperation::Ls {
+                path,
+                all,
+                detailed,
+            } => {
                 let target = self.resolve(&session.current, path.as_deref().unwrap_or("."))?;
                 let target = require_directory(&target)?;
-                list_directory(&target).map_err(|error| directory_error(&target, error))?
+                let (text, details) = directory_listing::list(&target, all, detailed)
+                    .map_err(|error| directory_error(&target, error))?;
+                listing = details;
+                text
             }
             DirectoryOperation::CompletePath {
                 prefix,
                 directories_only,
+                all,
             } => {
                 candidates =
-                    Some(self.complete_path(&session.current, &prefix, directories_only)?);
+                    Some(self.complete_path(&session.current, &prefix, directories_only, all)?);
                 String::new()
             }
             DirectoryOperation::OpenCurrent => {
@@ -173,6 +189,7 @@ impl DirectoryStore {
             directory: session.current.display().to_string(),
             text,
             removal,
+            listing,
             candidates,
         })
     }
@@ -182,6 +199,7 @@ impl DirectoryStore {
         current: &Path,
         input: &str,
         directories_only: bool,
+        all: bool,
     ) -> Result<Vec<PathCandidate>, String> {
         if input.chars().any(char::is_control) {
             return Ok(Vec::new());
@@ -207,7 +225,7 @@ impl DirectoryStore {
         if !target.is_dir() {
             return Ok(Vec::new());
         }
-        directory_listing::complete(&target, prefix, name, separator, directories_only)
+        directory_listing::complete(&target, prefix, name, separator, directories_only, all)
             .map_err(|error| directory_error(&target, error))
     }
 
@@ -235,31 +253,6 @@ impl DirectoryStore {
 
         Ok(current.join(path))
     }
-}
-
-fn list_directory(path: &Path) -> io::Result<String> {
-    let mut names = Vec::new();
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if name.starts_with('.') {
-            continue;
-        }
-        let metadata = entry.metadata()?;
-        if is_hidden(&metadata) {
-            continue;
-        }
-        let mut name = name.replace('\r', "\\r").replace('\n', "\\n");
-        if metadata.is_dir() {
-            name.push('/');
-        }
-        names.push(name);
-    }
-    names.sort_by_cached_key(|name| name.to_lowercase());
-    if names.is_empty() {
-        return Ok("目录中没有可显示的项目。".to_owned());
-    }
-    Ok(names.join("\n"))
 }
 
 fn require_directory(path: &Path) -> Result<PathBuf, String> {
@@ -419,6 +412,8 @@ mod tests {
         let listed = store
             .execute(DirectoryOperation::Ls {
                 path: Some("项目 文件".into()),
+                all: false,
+                detailed: false,
             })
             .unwrap();
         assert!(listed.text.contains("子目录/"));

@@ -24,6 +24,7 @@ import {
   executeNote,
   runDesktopCommand,
 } from './desktop-platform'
+import { formatDirectoryListing } from './directory-command'
 import {
   cyclePathCompletion,
   pathContext,
@@ -303,7 +304,9 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
       workingDirectory.value = outcome.directory
       if (outcome.removal)
         pendingRemoval.value = { entryId: id, kind: 'file', ...outcome.removal }
-      output = outcome.text
+      output = outcome.listing
+        ? formatDirectoryListing(outcome.listing)
+        : outcome.text
     } else if (command.type === 'note') {
       const operation = command.operation
       if (
@@ -423,6 +426,7 @@ function completeInput(event: KeyboardEvent) {
         action: 'complete_path',
         prefix: context.prefix,
         directories_only: context.directoriesOnly,
+        all: context.all,
       }),
     )
     .then((outcome) => {

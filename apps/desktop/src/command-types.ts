@@ -3,11 +3,12 @@ export type OpenTargetKind = 'app' | 'folder' | 'file' | 'url'
 export type DirectoryOperation =
   | { action: 'pwd' | 'open_current' }
   | { action: 'cd'; path?: string }
-  | { action: 'ls'; path?: string }
+  | { action: 'ls'; path?: string; all?: boolean; detailed?: boolean }
   | {
       action: 'complete_path'
       prefix: string
       directories_only: boolean
+      all: boolean
     }
   | { action: 'mkdir'; path: string }
   | { action: 'copy'; source: string; destination: string; recursive: boolean }
@@ -17,10 +18,18 @@ export type DirectoryOperation =
 
 export type PathCandidate = { path: string; directory: boolean }
 
+export type DirectoryEntry = {
+  name: string
+  kind: 'directory' | 'file' | 'link' | 'other'
+  bytes: number | null
+  modified_ms: number | null
+}
+
 export type DirectoryOutcome = {
   directory: string
   text: string
   removal?: { id: number; path: string }
+  listing?: DirectoryEntry[]
   candidates?: PathCandidate[]
 }
 

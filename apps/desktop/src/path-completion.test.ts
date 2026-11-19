@@ -20,7 +20,7 @@ describe('path completion', () => {
     })
   })
 
-  it('finishes files, quotes spaces, and detects ls paths', () => {
+  it('finishes files, quotes spaces, and handles ls options', () => {
     const input = 'cp source "..\\文'
     const context = pathContext(input, input.length)
     if (!context) throw new Error('Expected a path argument')
@@ -31,10 +31,12 @@ describe('path completion', () => {
     ).toMatchObject({
       value: 'cp source "..\\文 件.txt" ',
     })
-    expect(pathContext('ls ', 'ls '.length)).toMatchObject({
+    expect(pathContext('ls -al ', 'ls -al '.length)).toMatchObject({
       prefix: '',
       directoriesOnly: true,
+      all: true,
     })
+    expect(pathContext('ls -a', 'ls -a'.length)).toBeUndefined()
     expect(pathContext('cp a b c', 'cp a b c'.length)).toBeUndefined()
   })
 

@@ -6,7 +6,7 @@ const pathSlots = new Map<
   { count: number; directoriesOnly: boolean; options?: boolean }
 >([
   ['cd', { count: 1, directoriesOnly: true }],
-  ['ls', { count: 1, directoriesOnly: true }],
+  ['ls', { count: 1, directoriesOnly: true, options: true }],
   ['mkdir', { count: 1, directoriesOnly: true, options: true }],
   ['cp', { count: 2, directoriesOnly: false, options: true }],
   ['mv', { count: 2, directoriesOnly: false, options: true }],
@@ -20,6 +20,7 @@ type PathContext = {
   prefix: string
   quote?: string
   directoriesOnly: boolean
+  all: boolean
 }
 
 export type PathCompletion = {
@@ -56,6 +57,7 @@ export function pathContext(
 
   let supplied = 0
   let afterOptions = false
+  let all = false
   for (const earlier of tokens) {
     if (earlier === token || earlier.start >= cursor) break
     if (
@@ -66,6 +68,8 @@ export function pathContext(
       earlier.value !== '-'
     ) {
       if (earlier.value === '--') afterOptions = true
+      else if (command === 'ls' && /^-[al]+$/u.test(earlier.value))
+        all ||= earlier.value.includes('a')
     } else {
       supplied++
     }
@@ -87,6 +91,7 @@ export function pathContext(
     prefix: token?.value ?? '',
     quote,
     directoriesOnly: slots.directoriesOnly,
+    all,
   }
 }
 

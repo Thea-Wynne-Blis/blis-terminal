@@ -2,6 +2,7 @@ import { tokenizeArguments } from './command-arguments'
 import type {
   CommandDefinition,
   CommandResult,
+  DirectoryEntry,
   DirectoryOperation,
 } from './command-types'
 
@@ -31,13 +32,14 @@ export const cdDefinition: CommandDefinition = {
 
 export const lsDefinition: CommandDefinition = {
   summary: '列出目录中的文件和子目录',
-  usage: ['ls [目录]'],
+  usage: ['ls [-a] [-l] [--] [目录]'],
   details: [
     '默认列出当前目录。可传入相对路径或绝对路径，目录名含空格时请加引号。',
     '子目录以 / 结尾，隐藏项目默认省略。',
-    '输入部分路径后按 Tab 补全目录名。',
+    '-a 显示隐藏项目。-l 显示类型、字节数和修改时间。支持 ls -al。',
+    '输入部分路径后按 Tab 补全目录名。用 -- 标记选项结束。',
   ],
-  examples: ['ls', 'ls ..', 'ls "C:\\Program Files"'],
+  examples: ['ls', 'ls -al', 'ls -l ..', 'ls "C:\\Program Files"'],
   run: list,
 }
 
@@ -152,13 +154,76 @@ function changeDirectory(input: string): CommandResult {
 function list(input: string): CommandResult {
   const tokens = tokenizeArguments(input, { preserveBackslashes: true })
   if (!tokens) return directoryError('ls', '引号没有闭合。')
-  if (tokens.length > 1)
-    return directoryError('ls', '请输入一个目录，含空格时请加引号。')
-  const path = tokens[0]?.value
-  if (path === '') return directoryError('ls', '请输入有效的目录路径。')
-  return directoryCommand(
-    path === undefined ? { action: 'ls' } : { action: 'ls', path },
+  let path: string | undefined
+  let all = false
+  let detailed = false
+  let afterOptions = false
+  for (const { value, literal } of tokens) {
+    if (!afterOptions && !literal && value === '--') {
+      afterOptions = true
+    } else if (
+      !afterOptions &&
+      !literal &&
+      value.startsWith('-') &&
+      value !== '-'
+    ) {
+      if (!/^-[al]+$/u.test(value))
+        return directoryError('ls', '未知选项「' + value + '」。')
+      all ||= value.includes('a')
+      detailed ||= value.includes('l')
+    } else {
+      if (path !== undefined || !value)
+        return directoryError('ls', '请输入一个目录，含空格时请加引号。')
+      path = value
+    }
+  }
+  return directoryCommand({
+    action: 'ls',
+    ...(path !== undefined && { path }),
+    ...(all && { all }),
+    ...(detailed && { detailed }),
+  })
+}
+
+const listingKinds: Record<DirectoryEntry['kind'], string> = {
+  directory: 'DIR',
+  file: 'FILE',
+  link: 'LINK',
+  other: 'OTHER',
+}
+
+const listingTime = new Intl.DateTimeFormat('sv-SE', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+})
+
+export function formatDirectoryListing(entries: DirectoryEntry[]): string {
+  const sizeWidth = entries.reduce(
+    (width, entry) => Math.max(width, String(entry.bytes ?? '-').length),
+    7,
   )
+  const rows = entries.map(({ name, kind, bytes, modified_ms }) => {
+    const time = modified_ms === null ? '-' : listingTime.format(modified_ms)
+    return [
+      listingKinds[kind].padEnd(5),
+      String(bytes ?? '-').padStart(sizeWidth),
+      time.padEnd(19),
+      name,
+    ].join('  ')
+  })
+  return [
+    'TYPE   ' +
+      'SIZE(B)'.padStart(sizeWidth) +
+      '  ' +
+      'MODIFIED'.padEnd(19) +
+      '  NAME',
+    ...rows,
+  ].join('\n')
 }
 
 function directoryCommand(operation: DirectoryOperation): CommandResult {
