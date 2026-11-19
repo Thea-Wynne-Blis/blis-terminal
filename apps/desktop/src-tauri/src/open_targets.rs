@@ -2,7 +2,7 @@ use std::{
     collections::{btree_map::Entry, BTreeMap},
     fs, io,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Child, Command},
     sync::Mutex,
 };
 
@@ -180,7 +180,7 @@ fn unknown_alias(alias: &str) -> String {
     format!("未找到别名「{alias}」。输入 open list 查看清单。")
 }
 
-fn validate_path(kind: TargetKind, value: &str) -> Result<&Path, String> {
+pub(crate) fn validate_path(kind: TargetKind, value: &str) -> Result<&Path, String> {
     let path = Path::new(value);
     if !path.is_absolute() || value.chars().any(char::is_control) {
         return Err("请输入有效的绝对路径。".to_owned());
@@ -213,17 +213,20 @@ fn launch_target(target: &Target) -> Result<LaunchStatus, String> {
     }
     let path = validate_path(target.kind, &target.target)?;
     if target.kind == TargetKind::App {
-        let mut app = Command::new(path);
-        if let Some(directory) = path.parent() {
-            app.current_dir(directory);
-        }
-        let child = app
-            .spawn()
-            .map_err(|error| format!("无法启动应用（{error}）。"))?;
-        return observe_launch(child);
+        return observe_launch(spawn_app(path, &[])?);
     }
     open_with_system(path.as_os_str()).map_err(|error| format!("无法打开目标（{error}）。"))?;
     Ok(LaunchStatus::SystemHandoff)
+}
+
+pub(crate) fn spawn_app(path: &Path, args: &[&str]) -> Result<Child, String> {
+    let mut app = Command::new(path);
+    app.args(args);
+    if let Some(directory) = path.parent() {
+        app.current_dir(directory);
+    }
+    app.spawn()
+        .map_err(|error| format!("无法启动应用（{error}）。"))
 }
 
 #[tauri::command]

@@ -4,21 +4,33 @@
 
 每条命令都可以用 `help <命令>`、`<命令> --help` 或 `<命令> -h` 查看详细用法和示例。命令的说明与执行函数一起注册，命令列表和详细帮助从同一份定义生成。
 
-输入 `shortcut` 可查看快捷键。`Ctrl+L` 清屏，`Ctrl+O` 折叠或展开已执行命令的输出。可用鼠标拖选屏幕上的命令或 `history` 输出，再按 `Ctrl+C` 复制。上下方向键可取回历史命令继续编辑。
+输入 `shortcut` 可查看快捷键。输入命令名的前几个字母后按 `Tab` 补全，例如 `se` 补成 `search`。有多个匹配时连续按 `Tab` 可切换。`Ctrl+L` 清屏，`Ctrl+O` 折叠或展开已执行命令的输出。可用鼠标拖选屏幕上的命令或 `history` 输出，再按 `Ctrl+C` 复制。上下方向键可取回历史命令继续编辑。
 
-新增命令时实现 `CommandDefinition`，再加入 `apps/desktop/src/terminal-commands.ts` 的命令表。新增搜索引擎时，在 `apps/desktop/src/search-command.ts` 为引擎填写标识、名称、搜索入口和关键词参数，帮助会自动列出它。
+新增命令时实现 `CommandDefinition`，再加入 `apps/desktop/src/terminal-commands.ts` 的命令表。
 
 ## 搜索与打开网页
 
 ```text
 search Rust 入门教程
-search github "vue terminal"
-search "Windows 托盘" --engine=bing
-search -e google "Rust Tauri"
+search bilibili csgo
+search -s github "vue terminal"
+search --site zhihu -b chrome "Windows 托盘"
 search https://github.com/liyupi/yuindex
+
+search browser list
+search browser default chrome
+search browser add edge --app "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"
+search browser default system
+search browser remove edge
+
+search site list
+search site add demo -t "https://example.com/search?q={query}"
+search site remove demo
 ```
 
-省略引擎时使用百度。可选引擎为 `baidu`、`bing`、`google`、`github`。引号用于把带空格的内容作为一个参数，`--` 之后按关键词处理，例如 `search bing -- -example`。直接跳转接受 HTTP 和 HTTPS 网址。搜索结果和网址均交给系统默认浏览器打开。输入 `help search` 可查看用法。
+省略站点时使用百度。预置百度、Bing、Google、GitHub、Bilibili 和知乎。自定义站点与浏览器别名不区分英文字母大小写。`-s` 与 `--site` 选站点，`-b` 与 `--browser` 临时选浏览器。`--` 之后按字面搜索，例如 `search -- bilibili` 会在百度搜索 bilibili。
+
+Blis 初始跟随 Windows 默认浏览器，并自动登记安装在标准位置的 Chrome。`search browser default chrome` 将 Chrome 设为 Blis 内默认。`search site add` 使用 `-t` 或 `--template` 指定 HTTP(S) 模板，查询参数中需要有一个完整的 `{query}` 值。自定义设置保存在 `%APPDATA%/dev.blis.terminal/search-settings.json`，重启后可继续使用。输入 `help search`、`search site --help` 或 `search browser --help` 查看说明。
 
 ## 保存常用打开目标
 

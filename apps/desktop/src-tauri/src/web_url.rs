@@ -27,13 +27,6 @@ pub(crate) fn open_in_browser(input: &str) -> Result<(), String> {
     open_with_system(OsStr::new(url.as_str())).map_err(|_| "无法打开默认浏览器。".to_owned())
 }
 
-#[tauri::command]
-pub async fn open_web_url(url: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || open_in_browser(&url))
-        .await
-        .map_err(|_| "无法打开默认浏览器。".to_owned())?
-}
-
 #[cfg(test)]
 mod tests {
     use super::parse_web_url;

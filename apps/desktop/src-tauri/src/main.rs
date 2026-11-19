@@ -6,6 +6,7 @@ mod config_file;
 mod desktop_open;
 mod lifecycle;
 mod open_targets;
+mod search_settings;
 mod web_url;
 
 use std::sync::Mutex;
@@ -47,7 +48,7 @@ fn main() {
             appearance::execute_appearance,
             exit_app,
             open_targets::execute_open_target,
-            web_url::open_web_url
+            search_settings::execute_search
         ])
         .on_window_event(|window, event| {
             if window.label() == lifecycle::TERMINAL_LABEL {
@@ -63,6 +64,9 @@ fn main() {
             let config_directory = app.path().app_config_dir()?;
             app.manage(open_targets::OpenTargets::new(
                 config_directory.join("open-targets.json"),
+            ));
+            app.manage(search_settings::SearchStore::new(
+                config_directory.join("search-settings.json"),
             ));
             app.manage(appearance::AppearanceStore::new(config_directory));
             lifecycle::create_tray(app.handle())?;

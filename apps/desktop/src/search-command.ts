@@ -1,68 +1,163 @@
 import { tokenizeArguments, type ArgumentToken } from './command-arguments'
-import type { CommandDefinition, CommandResult } from './command-types'
+import type {
+  CommandDefinition,
+  CommandResult,
+  SearchOperation,
+} from './command-types'
 
-const defaultEngine = {
-  id: 'baidu',
-  name: '百度',
-  url: 'https://www.baidu.com/s',
-  parameter: 'wd',
-}
-const engines = [
-  defaultEngine,
-  {
-    id: 'bing',
-    name: 'Bing',
-    url: 'https://www.bing.com/search',
-    parameter: 'q',
-  },
-  {
-    id: 'google',
-    name: 'Google',
-    url: 'https://www.google.com/search',
-    parameter: 'q',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    url: 'https://github.com/search',
-    parameter: 'q',
-  },
+const siteUsage = [
+  'search site add <站点> -t "<HTTP 或 HTTPS 搜索模板>"',
+  'search site list',
+  'search site remove <站点>',
 ]
-const maxUrlLength = 8192
+
+const browserUsage = [
+  'search browser add <浏览器> --app "<绝对路径.exe>"',
+  'search browser list',
+  'search browser default <浏览器|system>',
+  'search browser remove <浏览器>',
+]
+
+const siteDetails = [
+  '-t 和 --template 都可指定模板。在查询参数中使用一个完整的 {query} 值，例如 ?q={query}。',
+  '自定义站点会保存。baidu 是默认搜索站点，始终可用。',
+]
+const browserDetails = [
+  'system 跟随 Windows 默认浏览器。路径含空格时请加引号。',
+  'search browser default 修改 Blis 的默认搜索浏览器。-b 或 --browser 仅覆盖当前命令。',
+  '自定义浏览器和默认设置会保存，移除当前默认项会恢复为 system。',
+]
+
+const siteExample =
+  'search site add devdocs --template "https://developer.mozilla.org/en-US/search?q={query}"'
+const browserExample =
+  'search browser add edge --app "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe"'
 
 export const searchDefinition: CommandDefinition = {
-  summary: '搜索关键词或打开网址',
+  summary: '按站点搜索、打开网址和管理搜索设置',
   usage: [
-    'search <关键词>',
-    'search <引擎> <关键词>',
-    'search <关键词> --engine <引擎>',
-    'search <HTTP 或 HTTPS 网址>',
+    'search [<站点>] <关键词> [-s|--site <站点>] [-b|--browser <浏览器>]',
+    'search <HTTP 或 HTTPS 网址> [-b|--browser <浏览器>]',
+    'search site --help',
+    'search browser --help',
   ],
   details: [
-    `默认使用${defaultEngine.name}。可选引擎为 ${engines.map(({ id }) => id).join('、')}。`,
-    '--engine 可简写为 -e，也可用 --engine=bing。用引号包住带空格的参数。',
-    '-- 后面的参数作为关键词。结果交给系统默认浏览器打开。',
+    '首个词匹配已保存的站点时，会在该站点搜索。省略站点时使用百度。',
+    '-- 后面的词按字面搜索。用引号包住站点名也可以把它作为关键词。',
+    '输入 search site list 或 search browser list 查看可用名称。',
   ],
   examples: [
-    'search Rust 入门教程',
-    'search github "vue terminal"',
-    'search "Windows 托盘" --engine=bing',
-    'search bing -- -example',
-    'search https://github.com/liyupi/yuindex',
+    'search bilibili csgo',
+    'search -s bilibili -b chrome "csgo 教程"',
+    'search browser default chrome',
+    siteExample,
+    'search https://github.com -b chrome',
   ],
   run: searchCommand,
 }
 
-function searchError(text: string): CommandResult {
-  return { type: 'error', text }
+function searchError(message: string): CommandResult {
+  return { type: 'error', text: message + ' 输入 help search 查看用法。' }
+}
+
+function execute(operation: SearchOperation): CommandResult {
+  return { type: 'search', operation }
+}
+
+function optionParts(option: string): [string, string | undefined] {
+  const separator = option.indexOf('=')
+  return separator < 0
+    ? [option, undefined]
+    : [option.slice(0, separator), option.slice(separator + 1)]
 }
 
 function searchCommand(input: string): CommandResult {
-  const tokens = tokenizeArguments(input)
-  if (!tokens) return searchError('引号没有闭合。输入 help search 查看用法。')
+  // Executable paths can contain literal Windows backslashes.
+  const browserManagement = /^browser(?:\s|$)/iu.test(input)
+  const tokens = tokenizeArguments(input, {
+    preserveBackslashes: browserManagement,
+  })
+  if (!tokens) return searchError('引号没有闭合。')
 
+  const [first, ...rest] = tokens
+  if (first && !first.literal) {
+    const group = first.value.toLowerCase()
+    if (group === 'site' || group === 'browser') return manage(group, rest)
+  }
+  return runSearch(tokens)
+}
+
+function manage(
+  group: 'site' | 'browser',
+  tokens: ArgumentToken[],
+): CommandResult {
+  const [verb, name, option, value] = tokens.map((token) => token.value)
+  const site = group === 'site'
+  const usage = site ? siteUsage : browserUsage
+  if (!verb || (tokens.length === 1 && ['-h', '--help'].includes(verb))) {
+    const details = site ? siteDetails : browserDetails
+    const example = site ? siteExample : browserExample
+    return {
+      type: 'text',
+      text: [
+        '用法',
+        ...usage.map((line) => '  ' + line),
+        '',
+        ...details,
+        '',
+        '示例',
+        '  ' + example,
+      ].join('\n'),
+    }
+  }
+
+  switch (verb.toLowerCase()) {
+    case 'list':
+      if (tokens.length === 1)
+        return execute({ action: site ? 'site_list' : 'browser_list' })
+      break
+    case 'remove':
+      if (tokens.length === 2 && name)
+        return execute({
+          action: site ? 'site_remove' : 'browser_remove',
+          name,
+        })
+      break
+    case 'default':
+      if (!site && tokens.length === 2 && name)
+        return execute({ action: 'browser_default', name })
+      break
+    case 'add': {
+      const [flag, inline] = optionParts(option ?? '')
+      const expected = site ? ['-t', '--template'] : ['--app']
+      const target = inline ?? value
+      if (
+        name &&
+        target &&
+        expected.includes(flag) &&
+        tokens.length === (inline === undefined ? 4 : 3)
+      ) {
+        return execute(
+          site
+            ? { action: 'site_add', name, template: target }
+            : { action: 'browser_add', name, path: target },
+        )
+      }
+      break
+    }
+  }
+  return {
+    type: 'error',
+    text: '用法有误。输入 search ' + group + ' --help 查看。',
+  }
+}
+
+function runSearch(tokens: ArgumentToken[]): CommandResult {
   const keywords: ArgumentToken[] = []
-  let engine: (typeof engines)[number] | undefined
+  const options: Pick<
+    Extract<SearchOperation, { action: 'run' }>,
+    'site' | 'browser'
+  > = {}
   let afterOptions = false
 
   for (let index = 0; index < tokens.length; index++) {
@@ -83,67 +178,31 @@ function searchCommand(input: string): CommandResult {
       continue
     }
 
-    const option = /^(?:-e|--engine)(?:=(.*))?$/u.exec(token.value)
-    if (!option)
-      return searchError(
-        `未知选项「${token.value}」。输入 help search 查看用法。`,
-      )
-    if (engine) return searchError('请只指定一个 --engine。')
-
-    const value = option[1] ?? tokens[index + 1]?.value
+    const [flag, inline] = optionParts(token.value)
+    const key =
+      flag === '-s' || flag === '--site'
+        ? 'site'
+        : flag === '-b' || flag === '--browser'
+          ? 'browser'
+          : undefined
+    if (!key) return searchError('未知选项「' + token.value + '」。')
+    if (options[key]) return searchError('请只指定一个 --' + key + '。')
+    const value = inline ?? tokens[index + 1]?.value
     if (!value || value.startsWith('-'))
-      return searchError('--engine 需要一个引擎名称。')
-    if (option[1] === undefined) index++
-    engine = engines.find(({ id }) => id === value.toLowerCase())
-    if (!engine)
       return searchError(
-        `未知引擎「${value}」。输入 help search 查看支持的引擎。`,
+        flag + ' 需要一个' + (key === 'site' ? '站点名称。' : '浏览器名称。'),
       )
+    if (inline === undefined) index++
+    options[key] = value
   }
 
-  const first = keywords[0]
-  if (!engine && first && !first.literal) {
-    engine = engines.find(({ id }) => id === first.value.toLowerCase())
-    if (engine) keywords.shift()
-  }
-
-  const query = keywords
-    .map(({ value }) => value)
-    .join(' ')
-    .trim()
-  if (!query)
-    return searchError('请输入关键词或网址。输入 help search 查看用法。')
-
-  let url: URL
-  let destination: string
-  if (
-    !engine &&
-    !afterOptions &&
-    keywords.length === 1 &&
-    /^[a-z][a-z\d+.-]*:/iu.test(query)
-  ) {
-    if (!/^https?:\/\/[^/\\\s]/iu.test(query))
-      return searchError('请输入完整的 HTTP 或 HTTPS 网址。')
-    try {
-      url = new URL(query)
-    } catch {
-      return searchError('网址格式有误。')
-    }
-    if (url.username || url.password)
-      return searchError('网址不能包含账号或密码。')
-    destination = url.hostname
-  } else {
-    const provider = engine ?? defaultEngine
-    url = new URL(provider.url)
-    url.searchParams.set(provider.parameter, query)
-    destination = provider.name
-  }
-
-  if (url.href.length > maxUrlLength)
-    return searchError('网址过长，请缩短输入。')
-  return {
-    type: 'open-web',
-    url: url.href,
-    text: `已交给默认浏览器打开 ${destination}。`,
-  }
+  const words = keywords.map(({ value }) => value)
+  if (!words.join(' ').trim()) return searchError('请输入关键词或网址。')
+  return execute({
+    action: 'run',
+    ...options,
+    words,
+    inferSite: !keywords[0]?.literal,
+    allowUrl: !afterOptions,
+  })
 }

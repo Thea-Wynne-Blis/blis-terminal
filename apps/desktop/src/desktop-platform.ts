@@ -32,6 +32,7 @@ const kindNames: Record<OpenTargetKind, string> = {
 
 let openQueue = Promise.resolve()
 let appearanceQueue = Promise.resolve()
+let searchQueue = Promise.resolve()
 
 export function executeAppearance(
   operation: AppearanceOperation,
@@ -92,9 +93,16 @@ export async function runDesktopCommand(
 ): Promise<string> {
   if (!isTauri()) throw new Error('请在 Blis 桌面版中执行此命令。')
   switch (command.type) {
-    case 'open-web':
-      await invoke('open_web_url', { url: command.url })
-      return command.text
+    case 'search': {
+      const request = searchQueue.then(() =>
+        invoke<string>('execute_search', { operation: command.operation }),
+      )
+      searchQueue = request.then(
+        () => undefined,
+        () => undefined,
+      )
+      return request
+    }
     case 'open-target':
       return executeOpenOperation(command.operation)
     case 'exit':

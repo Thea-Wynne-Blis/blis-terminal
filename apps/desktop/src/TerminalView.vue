@@ -12,10 +12,16 @@ import {
 import BackgroundPicker from './BackgroundPicker.vue'
 import type { Appearance, DesktopCommand } from './command-types'
 import { executeAppearance, runDesktopCommand } from './desktop-platform'
-import { executeTerminalInput, terminalVersion } from './terminal-commands'
+import {
+  completeCommand,
+  executeTerminalInput,
+  terminalVersion,
+  type CommandCompletion,
+} from './terminal-commands'
 import {
   getHistoryStep,
   getOutputShortcut,
+  isCommandCompletionKey,
   isCompositionKey,
   shouldHideTerminal,
 } from './terminal-keyboard'
@@ -58,7 +64,7 @@ const maxHistory = 100
 const maxTranscript = 200
 const maxOutputLength = 8192
 const pendingOutput: Record<DesktopCommand['type'], string> = {
-  'open-web': '正在打开浏览器…',
+  search: '正在处理搜索请求…',
   'open-target': '正在处理打开清单…',
   background: '正在读取背景设置…',
   exit: '正在退出 Blis…',
@@ -66,6 +72,7 @@ const pendingOutput: Record<DesktopCommand['type'], string> = {
 let nextEntry = 0
 let historyPosition: number | undefined
 let draft = ''
+let completion: CommandCompletion | undefined
 
 function focusInput() {
   input.value?.focus({ preventScroll: true })
@@ -135,7 +142,7 @@ function submitCommand() {
   } else {
     const id = nextEntry++
     const desktopCommand =
-      result.type === 'open-web' ||
+      result.type === 'search' ||
       result.type === 'open-target' ||
       result.type === 'background' ||
       result.type === 'exit'
@@ -205,8 +212,35 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
   }
 }
 
+function resetCompletion() {
+  completion = undefined
+}
+
+function completeInput(event: KeyboardEvent) {
+  const field = input.value
+  if (
+    field?.selectionStart == null ||
+    field.selectionStart !== field.selectionEnd
+  ) {
+    resetCompletion()
+    return
+  }
+  completion = completeCommand(line.value, field.selectionStart, completion)
+  if (!completion) return
+
+  event.preventDefault()
+  const { value, caret } = completion
+  line.value = value
+  void nextTick(() => field.setSelectionRange(caret, caret))
+}
+
 function handleInputKeydown(event: KeyboardEvent) {
   if (pickerOpen.value || isCompositionKey(event)) return
+  if (isCommandCompletionKey(event)) {
+    completeInput(event)
+    return
+  }
+  resetCompletion()
   if (event.key === 'Enter' && !event.repeat) {
     event.preventDefault()
     submitCommand()
@@ -356,6 +390,8 @@ onUnmounted(() => {
         autocapitalize="off"
         spellcheck="false"
         maxlength="4096"
+        @input="resetCompletion"
+        @blur="resetCompletion"
         @keydown="handleInputKeydown"
       />
     </div>

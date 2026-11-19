@@ -1,14 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "terminal",
-  "description": "Read the hotkey, manage saved open targets, open HTTP(S) URLs, hide the window, and exit Blis.",
+  "description": "Read the hotkey, manage saved open targets and search settings, hide the window, and exit Blis.",
   "windows": ["terminal"],
   "permissions": [
     "allow-active-shortcut",
     "allow-execute-appearance",
     "allow-execute-open-target",
     "allow-exit-app",
-    "allow-open-web-url",
+    "allow-execute-search",
     "core:window:allow-hide"
   ]
 }

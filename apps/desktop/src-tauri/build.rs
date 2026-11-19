@@ -2,7 +2,7 @@ fn main() {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "active_shortcut",
         "execute_appearance",
-        "open_web_url",
+        "execute_search",
         "execute_open_target",
         "exit_app",
     ]);

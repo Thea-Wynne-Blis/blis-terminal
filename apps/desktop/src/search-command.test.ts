@@ -1,68 +1,110 @@
 import { describe, expect, it } from 'vitest'
 import { executeTerminalInput } from './terminal-commands'
 
-function searchUrl(input: string): URL {
-  const result = executeTerminalInput(`search ${input}`, [])
-  if (result.type !== 'open-web') throw new Error(JSON.stringify(result))
-  return new URL(result.url)
+function search(input: string) {
+  return executeTerminalInput('search ' + input, [])
 }
 
 describe('search', () => {
-  it('uses Baidu by default and encodes special characters as keyword text', () => {
-    const url = searchUrl('C++ & Rust 中文 #入门')
-    expect(url.origin + url.pathname).toBe('https://www.baidu.com/s')
-    expect([...url.searchParams.entries()]).toEqual([
-      ['wd', 'C++ & Rust 中文 #入门'],
-    ])
-    expect(url.hash).toBe('')
+  it('passes the first word and keywords to the saved-site resolver', () => {
+    expect(search('Bilibili C++ & 中文 #攻略')).toEqual({
+      type: 'search',
+      operation: {
+        action: 'run',
+        words: ['Bilibili', 'C++', '&', '中文', '#攻略'],
+        inferSite: true,
+        allowUrl: true,
+      },
+    })
   })
 
   it.each([
-    ['GitHub "vue terminal"', 'https://github.com/search', 'vue terminal'],
-    ['-e bing "Rust 教程"', 'https://www.bing.com/search', 'Rust 教程'],
-    ['"两 个词" --engine="google"', 'https://www.google.com/search', '两 个词'],
-    [
-      "bing -- Rust's -example",
-      'https://www.bing.com/search',
-      "Rust's -example",
-    ],
-    ['bing "a \\"quote\\""', 'https://www.bing.com/search', 'a "quote"'],
-  ])('parses %s', (input, endpoint, keyword) => {
-    const url = searchUrl(input)
-    expect(url.origin + url.pathname).toBe(endpoint)
-    expect(url.searchParams.get('q')).toBe(keyword)
+    ['-s bilibili -b chrome "csgo 教程"', 'csgo 教程'],
+    ['csgo --site=bilibili --browser="chrome"', 'csgo'],
+  ])('combines a site and a browser in %s', (input, keyword) => {
+    expect(search(input)).toMatchObject({
+      type: 'search',
+      operation: {
+        action: 'run',
+        site: 'bilibili',
+        browser: 'chrome',
+        words: [keyword],
+      },
+    })
   })
 
-  it('preserves a direct URL and supports searching for that URL explicitly', () => {
+  it('supports direct URLs with a browser override and literal keywords', () => {
     const direct = 'https://example.com/docs?q=a%26b#heading'
-    expect(searchUrl(direct).href).toBe(direct)
-    expect(searchUrl(`-- ${direct}`).searchParams.get('wd')).toBe(direct)
-    expect(searchUrl('"github"').searchParams.get('wd')).toBe('github')
+    expect(search(direct + ' -b chrome')).toMatchObject({
+      operation: { allowUrl: true, words: [direct], browser: 'chrome' },
+    })
+    expect(search('-- ' + direct)).toMatchObject({
+      operation: { allowUrl: false, words: [direct], inferSite: false },
+    })
+    expect(search('"github"')).toMatchObject({
+      operation: { words: ['github'], inferSite: false },
+    })
+    expect(search("bing -- Rust's -example")).toMatchObject({
+      operation: { words: ['bing', "Rust's", '-example'], inferSite: true },
+    })
+  })
+
+  it.each(['-t', '--template'])('registers a template with %s', (flag) => {
+    const template = 'https://example.com/search?type=post&q={query}'
+    expect(search('site add custom ' + flag + ' "' + template + '"')).toEqual({
+      type: 'search',
+      operation: { action: 'site_add', name: 'custom', template },
+    })
+  })
+
+  it('preserves a quoted Windows browser path', () => {
+    const path = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+    expect(search('browser add chrome --app "' + path + '"')).toEqual({
+      type: 'search',
+      operation: { action: 'browser_add', name: 'chrome', path },
+    })
+  })
+
+  it.each([
+    ['site list', { action: 'site_list' }],
+    ['site remove zhihu', { action: 'site_remove', name: 'zhihu' }],
+    ['browser list', { action: 'browser_list' }],
+    ['browser default system', { action: 'browser_default', name: 'system' }],
+    ['browser remove edge', { action: 'browser_remove', name: 'edge' }],
+  ])('dispatches %s', (input, operation) => {
+    expect(search(input)).toEqual({ type: 'search', operation })
   })
 
   it.each([
     ['', '关键词'],
-    ['bing', '关键词'],
     ['"missing closing quote', '引号'],
-    ['--engine', '需要'],
-    ['--engine unknown rust', '未知引擎'],
+    ['--site', '需要'],
+    ['-b -s google rust', '浏览器名称'],
+    ['-e bing rust', '未知选项'],
+    ['--engine bing rust', '未知选项'],
     ['--unknown rust', '未知选项'],
-    ['-e bing --engine google rust', '只指定一个'],
-    ['file:///C:/Windows', 'HTTP'],
-    ['javascript:alert(1)', 'HTTP'],
-    ['https://name:password@example.com', '账号或密码'],
-    ['中文'.repeat(500), '过长'],
-  ])('rejects invalid input or options', (input, feedback) => {
-    expect(executeTerminalInput(`search ${input}`, [])).toMatchObject({
+    ['-s bing --site google rust', '只指定一个'],
+    ['site add custom --url https://example.com', 'site --help'],
+    ['browser default edge chrome', 'browser --help'],
+  ])('rejects invalid input %s', (input, feedback) => {
+    expect(search(input)).toMatchObject({
       type: 'error',
       text: expect.stringContaining(feedback),
     })
   })
 
-  it('exposes command-specific help', () => {
+  it('exposes help for search and both subcommands', () => {
     expect(executeTerminalInput('help search', [])).toMatchObject({
       type: 'text',
-      text: expect.stringContaining('--engine'),
+      text: expect.stringContaining('--site'),
+    })
+    expect(search('site --help')).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('--template'),
+    })
+    expect(search('browser -h')).toMatchObject({
+      type: 'text',
+      text: expect.stringContaining('browser default'),
     })
   })
 })

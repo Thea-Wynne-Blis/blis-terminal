@@ -5,6 +5,23 @@ export type OpenOperation =
   | { action: 'list' }
   | { action: 'launch' | 'remove'; alias: string }
 
+export type SearchOperation =
+  | {
+      action: 'run'
+      site?: string
+      browser?: string
+      words: string[]
+      inferSite: boolean
+      allowUrl: boolean
+    }
+  | { action: 'site_add'; name: string; template: string }
+  | { action: 'browser_add'; name: string; path: string }
+  | { action: 'site_list' | 'browser_list' }
+  | {
+      action: 'site_remove' | 'browser_remove' | 'browser_default'
+      name: string
+    }
+
 export type AppearanceOperation =
   | { action: 'get' | 'reset' }
   | { action: 'select' | 'remove'; name: string }
@@ -28,7 +45,7 @@ export type Appearance = {
 }
 
 export type DesktopCommand =
-  | { type: 'open-web'; url: string; text: string }
+  | { type: 'search'; operation: SearchOperation }
   | { type: 'open-target'; operation: OpenOperation }
   | { type: 'background'; operation: AppearanceOperation }
   | { type: 'exit' }
