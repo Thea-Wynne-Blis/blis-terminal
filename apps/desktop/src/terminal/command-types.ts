@@ -6,6 +6,7 @@ export type DirectoryOperation =
   | { action: 'open_in_code'; path: string }
   | { action: 'preview_text' | 'edit_text'; path: string }
   | { action: 'save_text'; id: number; content: string }
+  | { action: 'close_text'; id: number }
   | { action: 'ls'; path?: string; all?: boolean; detailed?: boolean }
   | {
       action: 'complete_path'

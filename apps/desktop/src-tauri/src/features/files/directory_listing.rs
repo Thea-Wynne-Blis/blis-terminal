@@ -32,7 +32,8 @@ pub(crate) fn list(
     let mut rows = Vec::new();
     for entry in fs::read_dir(path)? {
         let entry = entry?;
-        let name = entry.file_name().to_string_lossy().into_owned();
+        let filename = entry.file_name();
+        let name = filename.to_string_lossy();
         if !all && name.starts_with('.') {
             continue;
         }
@@ -49,14 +50,16 @@ pub(crate) fn list(
         } else {
             EntryKind::Other
         };
-        let suffix = if matches!(kind, EntryKind::Directory) {
-            "/"
+        let mut name = if name.contains(['\r', '\n']) {
+            name.replace('\r', "\\r").replace('\n', "\\n")
         } else {
-            ""
+            name.into_owned()
         };
-        let name = name.replace('\r', "\\r").replace('\n', "\\n");
+        if matches!(kind, EntryKind::Directory) {
+            name.push('/');
+        }
         rows.push(ListingEntry {
-            name: format!("{name}{suffix}"),
+            name,
             bytes: (detailed && matches!(kind, EntryKind::File)).then_some(metadata.len()),
             modified_ms: if detailed {
                 modified_ms(&metadata)
@@ -66,20 +69,23 @@ pub(crate) fn list(
             kind,
         });
     }
-    rows.sort_by_cached_key(|entry| entry.name.to_lowercase());
     if rows.is_empty() {
         return Ok(("目录中没有可显示的项目。".to_owned(), None));
     }
+    rows.sort_by_cached_key(|entry| entry.name.to_lowercase());
     if detailed {
         return Ok((String::new(), Some(rows)));
     }
-    Ok((
-        rows.into_iter()
-            .map(|row| row.name)
-            .collect::<Vec<_>>()
-            .join("\n"),
-        None,
-    ))
+    let mut text = String::with_capacity(
+        rows.iter().map(|row| row.name.len()).sum::<usize>() + rows.len() - 1,
+    );
+    for (index, row) in rows.into_iter().enumerate() {
+        if index > 0 {
+            text.push('\n');
+        }
+        text.push_str(&row.name);
+    }
+    Ok((text, None))
 }
 
 fn modified_ms(metadata: &Metadata) -> Option<i64> {
@@ -161,6 +167,25 @@ fn is_hidden(_: &Metadata) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn large_directories_keep_sorted_entries_and_completion_choices() {
+        let root = tempfile::tempdir().unwrap();
+        let limit = 517;
+        for i in (0..limit).rev() {
+            fs::write(root.path().join(format!("file-{i:04}.txt")), "").unwrap();
+        }
+        let (_, rows) = list(root.path(), false, true).unwrap();
+        let rows = rows.unwrap();
+        assert_eq!(rows.len(), limit);
+        assert_eq!(rows[0].name, "file-0000.txt");
+        assert_eq!(rows[limit - 1].name, "file-0516.txt");
+        let choices = complete(root.path(), "", "file-", '/', false, false).unwrap();
+        assert_eq!(choices.len(), limit);
+        assert_eq!(choices[limit - 1].path, "file-0516.txt");
+        let narrowed = complete(root.path(), "", "file-0516", '/', false, false).unwrap();
+        assert_eq!(narrowed[0].path, "file-0516.txt");
+    }
 
     #[test]
     fn reports_hidden_entries_and_file_details_only_when_requested() {

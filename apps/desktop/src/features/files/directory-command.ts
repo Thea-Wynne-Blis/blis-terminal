@@ -223,28 +223,34 @@ const listingTime = new Intl.DateTimeFormat('sv-SE', {
   hourCycle: 'h23',
 })
 
-export function formatDirectoryListing(entries: DirectoryEntry[]): string {
+export function formatDirectoryListing(
+  entries: DirectoryEntry[],
+  maxLength: number,
+): string {
   const sizeWidth = entries.reduce(
     (width, entry) => Math.max(width, String(entry.bytes ?? '-').length),
     7,
   )
-  const rows = entries.map(({ name, kind, bytes, modified_ms }) => {
-    const time = modified_ms === null ? '-' : listingTime.format(modified_ms)
-    return [
-      listingKinds[kind].padEnd(5),
-      String(bytes ?? '-').padStart(sizeWidth),
-      time.padEnd(19),
-      name,
-    ].join('  ')
-  })
-  return [
+  let output =
     'TYPE   ' +
-      'SIZE(B)'.padStart(sizeWidth) +
-      '  ' +
-      'MODIFIED'.padEnd(19) +
-      '  NAME',
-    ...rows,
-  ].join('\n')
+    'SIZE(B)'.padStart(sizeWidth) +
+    '  ' +
+    'MODIFIED'.padEnd(19) +
+    '  NAME'
+  for (const { name, kind, bytes, modified_ms } of entries) {
+    // The transcript clips after this point, including the first overflowing row.
+    if (output.length > maxLength) break
+    const time = modified_ms === null ? '-' : listingTime.format(modified_ms)
+    output +=
+      '\n' +
+      [
+        listingKinds[kind].padEnd(5),
+        String(bytes ?? '-').padStart(sizeWidth),
+        time.padEnd(19),
+        name,
+      ].join('  ')
+  }
+  return output
 }
 
 function directoryCommand(operation: DirectoryOperation): CommandResult {

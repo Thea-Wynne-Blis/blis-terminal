@@ -112,7 +112,7 @@ onMounted(() => {
 <template>
   <dialog
     ref="dialog"
-    class="note-editor"
+    class="note-editor vim-editor"
     aria-labelledby="file-editor-title"
     @cancel.prevent="normalMode"
     @keydown="handleKeydown"
@@ -125,11 +125,6 @@ onMounted(() => {
       :readonly="mode !== 'insert' || busy"
       spellcheck="false"
     />
-    <p class="muted">
-      {{ { normal: '普通', insert: '插入', command: '命令' }[mode]
-      }}{{ dirty ? ' · 未保存' : '' }}
-      · i 编辑 · Esc 普通模式 · :w 保存 · :q 退出 · :wq 保存退出 · :q! 放弃退出
-    </p>
     <form
       v-if="mode === 'command'"
       class="prompt"
@@ -149,14 +144,51 @@ onMounted(() => {
     <p v-else-if="busy || (message && !dirty)" role="status">
       {{ busy ? '正在保存…' : message }}
     </p>
-    <div class="note-actions">
-      <button type="button" :disabled="busy" @click="insertMode">编辑</button>
-      <button type="button" :disabled="busy" @click="executeEditorCommand('w')">
-        保存
-      </button>
-      <button type="button" :disabled="busy" @click="executeEditorCommand('q')">
-        退出
-      </button>
-    </div>
+    <footer class="vim-status">
+      <span class="vim-mode">
+        {{ { normal: '普通', insert: '插入', command: '命令' }[mode] }}
+        {{ dirty ? '· 未保存' : '' }}
+      </span>
+      <span><kbd>i</kbd> 编辑</span>
+      <span><kbd>Esc</kbd> 普通模式</span>
+      <span><kbd>:w</kbd> 保存</span>
+      <span><kbd>:wq</kbd> 保存退出</span>
+      <span><kbd>:q</kbd> 退出</span>
+      <span><kbd>:q!</kbd> 放弃退出</span>
+    </footer>
   </dialog>
 </template>
+
+<style scoped>
+.vim-editor {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 12px 16px 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.vim-editor textarea {
+  min-height: 0;
+}
+
+.vim-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 8px 0;
+  border-top: 1px solid var(--menu-highlight);
+  color: var(--muted);
+}
+
+.vim-mode,
+.vim-status kbd {
+  color: var(--accent);
+  font: inherit;
+}
+</style>

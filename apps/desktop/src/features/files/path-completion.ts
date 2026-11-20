@@ -140,18 +140,26 @@ export function startPathCompletion(
   if (!usable.length) return
   if (usable.length === 1) return select(context, usable, 0)
 
-  let common = Array.from(usable[0].path)
-  for (const { path } of usable.slice(1)) {
-    const characters = Array.from(path)
-    const difference = common.findIndex(
-      (character, index) => character !== characters[index],
-    )
-    if (difference >= 0) common = common.slice(0, difference)
+  const first = usable[0].path
+  let sharedLength = first.length
+  for (
+    let i = 1;
+    i < usable.length && sharedLength > context.prefix.length;
+    i++
+  ) {
+    const { path } = usable[i]
+    let index = 0
+    while (index < sharedLength) {
+      const character = first.codePointAt(index)
+      if (character === undefined || character !== path.codePointAt(index))
+        break
+      index += character > 0xffff ? 2 : 1
+    }
+    sharedLength = index
   }
-  const prefix = common.join('')
-  if (prefix.length > context.prefix.length) {
+  if (sharedLength > context.prefix.length) {
     return {
-      ...render(context, prefix, false),
+      ...render(context, first.slice(0, sharedLength), false),
       cycle: { context, candidates: usable, index: -1 },
     }
   }

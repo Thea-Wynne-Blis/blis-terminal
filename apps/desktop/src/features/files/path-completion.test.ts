@@ -65,4 +65,15 @@ describe('path completion', () => {
       directoriesOnly: false,
     })
   })
+
+  it('keeps complete Unicode characters in the shared prefix', () => {
+    const context = pathContext('cat ', 4)
+    if (!context) throw new Error('Expected a path argument')
+    expect(
+      startPathCompletion(context, [
+        { path: '📂文档🐈.txt', directory: false },
+        { path: '📂文档🐕.txt', directory: false },
+      ])?.value,
+    ).toBe('cat 📂文档')
+  })
 })

@@ -47,6 +47,9 @@ pub enum DirectoryOperation {
         id: u32,
         content: String,
     },
+    CloseText {
+        id: u32,
+    },
     Mkdir {
         path: String,
     },
@@ -181,6 +184,10 @@ impl DirectoryStore {
                 .filter(|editor| editor.id == id)
                 .ok_or("文件编辑会话已失效，请重新打开文件。")?
                 .save(&content)?,
+            DirectoryOperation::CloseText { id } => {
+                drop(session.text_editor.take_if(|editor| editor.id == id));
+                String::new()
+            }
             DirectoryOperation::Mkdir { path } => {
                 files::make_directory(&self.resolve(&session.current, &path)?)?
             }
@@ -341,6 +348,37 @@ pub async fn execute_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn close_releases_only_the_matching_text_editor() {
+        let root = tempfile::tempdir().unwrap();
+        let store = DirectoryStore::new(root.path().to_path_buf());
+        store
+            .execute(DirectoryOperation::EditText {
+                path: "note.txt".into(),
+            })
+            .unwrap();
+        let id = store
+            .session
+            .lock()
+            .unwrap()
+            .text_editor
+            .as_ref()
+            .unwrap()
+            .id;
+        store
+            .execute(DirectoryOperation::CloseText { id: id + 1 })
+            .unwrap();
+        assert!(store.session.lock().unwrap().text_editor.is_some());
+        store.execute(DirectoryOperation::CloseText { id }).unwrap();
+        assert!(store.session.lock().unwrap().text_editor.is_none());
+        assert!(store
+            .execute(DirectoryOperation::SaveText {
+                id,
+                content: "obsolete".into()
+            })
+            .is_err());
+    }
 
     #[test]
     fn validates_files_and_directories_before_opening_in_the_editor() {

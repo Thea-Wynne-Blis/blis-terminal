@@ -151,9 +151,18 @@ function closeNote() {
 }
 
 function closeFile(message: string) {
-  if (!activeFile.value) return
-  setCommandOutput(activeFile.value.entryId, message)
+  const file = activeFile.value
+  if (!file) return
+  const { id } = file.draft
+  setCommandOutput(file.entryId, message)
   activeFile.value = undefined
+  commandQueue = commandQueue.then(async () => {
+    try {
+      await executeDirectory({ action: 'close_text', id })
+    } catch (error) {
+      console.error('Failed to close the file editing session', error)
+    }
+  })
   void nextTick(focusInput)
 }
 
@@ -242,10 +251,16 @@ function limitOutput(output: string): string {
 
 function submitCommand() {
   const command = line.value
-  if (!command.trim()) return
-
   line.value = ''
   historyPosition = undefined
+  if (!command.trim()) {
+    commandQueue = commandQueue.then(() => {
+      if (!activeGame.value && !modalOpen.value && !pickerOpen.value)
+        appendEntry('')
+    })
+    return
+  }
+
   const previousHistory = [...history]
   history.push(command)
   if (history.length > maxHistory) history.shift()
@@ -271,7 +286,6 @@ function dispatchCommand(command: string, previousHistory: readonly string[]) {
     clearTranscript()
     return
   }
-  const id = nextEntry++
   const desktopCommand = 'operation' in result || result.type === 'exit'
   const launchAlias =
     result.type === 'open-target' && result.operation.action === 'launch'
@@ -283,21 +297,16 @@ function dispatchCommand(command: string, previousHistory: readonly string[]) {
       ? ''
       : result.text
   if (launchAlias) output = '正在打开「' + launchAlias + '」…'
-  transcript.value.push({
-    id,
+  const id = appendEntry(
     command,
-    directory: workingDirectory.value,
-    output: limitOutput(output),
-    error: result.type === 'error',
-    collapsed: false,
-    launching: launchAlias !== undefined,
-  })
-  if (transcript.value.length > maxTranscript) transcript.value.shift()
+    output,
+    result.type === 'error',
+    launchAlias !== undefined,
+  )
   if (result.type === 'game') {
     activeGame.value = { name: result.game, entryId: id }
     resetCompletion()
   }
-  void nextTick(scrollToBottom)
   if (desktopCommand) {
     const request = completeDesktopCommand(id, result)
     if (
@@ -310,6 +319,27 @@ function dispatchCommand(command: string, previousHistory: readonly string[]) {
     )
       return request
   }
+}
+
+function appendEntry(
+  command: string,
+  output = '',
+  error = false,
+  launching = false,
+) {
+  const id = nextEntry++
+  transcript.value.push({
+    id,
+    command,
+    directory: workingDirectory.value,
+    output: limitOutput(output),
+    error,
+    collapsed: false,
+    launching,
+  })
+  if (transcript.value.length > maxTranscript) transcript.value.shift()
+  void nextTick(scrollToBottom)
+  return id
 }
 
 function finishGame(summary: string) {
@@ -364,7 +394,7 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
       if (outcome.editor)
         activeFile.value = { entryId: id, draft: outcome.editor }
       output = outcome.listing
-        ? formatDirectoryListing(outcome.listing)
+        ? formatDirectoryListing(outcome.listing, maxOutputLength)
         : outcome.text
     } else if (command.type === 'note') {
       const operation = command.operation
@@ -488,16 +518,18 @@ function completeInput(event: KeyboardEvent) {
   event.preventDefault()
   const request = ++pathRequest
   void commandQueue
-    .then(() =>
-      executeDirectory({
+    .then(() => {
+      if (request !== pathRequest) return
+      return executeDirectory({
         action: 'complete_path',
         prefix: context.prefix,
         directories_only: context.directoriesOnly,
         all: context.all,
-      }),
-    )
+      })
+    })
     .then((outcome) => {
       if (
+        !outcome ||
         request !== pathRequest ||
         line.value !== value ||
         field.selectionStart !== caret ||
@@ -645,7 +677,12 @@ onUnmounted(() => {
     </header>
 
     <section class="transcript" role="log" aria-label="命令输出">
-      <div v-for="entry in transcript" :key="entry.id" class="entry">
+      <div
+        v-for="entry in transcript"
+        :key="entry.id"
+        class="entry"
+        :class="{ 'empty-entry': !entry.command }"
+      >
         <p class="command">
           <span class="prompt-mark">{{ promptFor(entry.directory) }}</span>
           {{ entry.command }}

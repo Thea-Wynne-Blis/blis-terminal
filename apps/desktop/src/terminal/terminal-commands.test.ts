@@ -400,7 +400,8 @@ describe('utility commands', () => {
   })
 
   it.each([
-    ['ca', 'calc'],
+    ['cal', 'calc'],
+    ['cat', 'cat'],
     ['da', 'date'],
     ['no', 'note'],
   ])('completes %s', (prefix, name) =>

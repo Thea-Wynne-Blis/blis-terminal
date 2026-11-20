@@ -198,6 +198,10 @@ pre {
   margin-bottom: 0.7em;
 }
 
+.entry.empty-entry {
+  margin-bottom: 0;
+}
+
 .entry pre,
 code {
   font: inherit;
