@@ -17,6 +17,7 @@
     "allow-execute-welcome",
     "allow-exit-app",
     "allow-execute-search",
+    "allow-execute-store",
     "allow-start-timer"
   ]
 }

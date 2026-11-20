@@ -1,0 +1,478 @@
+.note-window {
+  container-type: inline-size;
+  resize: both;
+  overflow: hidden;
+  min-width: min(28rem, calc(100% - 16px));
+  min-height: min(18rem, calc(100% - 16px));
+  max-width: calc(100% - 16px);
+  max-height: calc(100% - 16px);
+  border-color: var(--menu-highlight);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgb(0 0 0 / 30%);
+}
+
+.note-markdown-editor {
+  width: min(74rem, calc(100% - 32px));
+  height: min(48rem, calc(100% - 32px));
+}
+
+.note-window > h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 1.15rem;
+}
+
+.note-window > h2 span {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 400;
+}
+
+.note-window .note-actions {
+  padding-right: 8px;
+}
+
+.note-window .note-save {
+  color: var(--focus-accent);
+}
+
+.note-save kbd {
+  padding-left: 6px;
+  color: var(--muted);
+}
+
+.note-workspace {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+}
+
+.note-workspace.has-preview {
+  grid-template-columns:
+    minmax(0, var(--note-editor-share))
+    12px
+    minmax(0, var(--note-preview-share));
+}
+
+.note-divider {
+  display: grid;
+  place-items: center;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.note-divider::before {
+  content: '';
+  width: 2px;
+  height: 24px;
+  border-radius: 2px;
+  background: var(--muted);
+}
+
+.note-divider:hover::before,
+.note-divider:focus-visible::before {
+  background: var(--accent);
+}
+
+@container (max-width: 520px) {
+  .note-workspace.has-preview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .note-divider {
+    display: none;
+  }
+}
+
+.note-workspace textarea {
+  width: 100%;
+  min-height: 0;
+  padding: 14px;
+  border-color: var(--menu-highlight);
+  background: rgb(0 0 0 / 10%);
+}
+
+.note-preview {
+  --preview-background: #fff;
+  --preview-foreground: #24292f;
+  --preview-muted: #52616e;
+  --preview-border: #d5dce3;
+  --preview-code: #f2f5f8;
+  --code-keyword: #7440a0;
+  --code-string: #246642;
+  --code-number: #9b3a10;
+  --code-name: #1b589a;
+  --code-comment: #576776;
+  --preview-font: 'Segoe UI', 'Microsoft YaHei UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--preview-border);
+  border-radius: 4px;
+  background: var(--preview-background);
+  color: var(--preview-foreground);
+  color-scheme: light;
+  font-family: var(--preview-font);
+}
+
+.note-preview[data-theme='dark'] {
+  --preview-background: #171b24;
+  --preview-foreground: #e5eafa;
+  --preview-muted: #acb6cb;
+  --preview-border: #424d63;
+  --preview-code: #242c3b;
+  --code-keyword: #e4a9f4;
+  --code-string: #a5dcaa;
+  --code-number: #fac28a;
+  --code-name: #8dccff;
+  --code-comment: #a2b2c9;
+  color-scheme: dark;
+}
+
+.note-preview[data-theme='paper'] {
+  --preview-background: #fbf4e4;
+  --preview-foreground: #443528;
+  --preview-muted: #72563c;
+  --preview-border: #d9c6a5;
+  --preview-code: #f0e6d2;
+  --code-keyword: #733a91;
+  --code-string: #316038;
+  --code-number: #963d1b;
+  --code-name: #25598a;
+  --code-comment: #6f5b44;
+  --preview-font: Georgia, 'Microsoft YaHei UI', serif;
+}
+
+.note-preview-tools {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--preview-border);
+  color: var(--preview-muted);
+  font-size: 0.9rem;
+}
+
+.note-preview-tools select {
+  border: 1px solid var(--preview-border);
+  border-radius: 3px;
+  background: var(--preview-background);
+  color: var(--preview-foreground);
+  font: inherit;
+}
+
+.note-preview-placeholder {
+  padding: 12px;
+  color: var(--preview-muted);
+}
+
+.note-rendered {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px 16px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.note-rendered
+  :where(h1, h2, h3, h4, h5, h6, p, pre, ul, ol, blockquote, table) {
+  margin: 0 0 0.85em;
+}
+
+.note-editor .note-rendered h2 {
+  margin: 0 0 0.65em;
+  font-size: 1.5em;
+}
+
+.note-rendered :where(pre, code) {
+  border-radius: 4px;
+  background: var(--preview-code);
+  color: inherit;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.note-rendered pre {
+  overflow: auto;
+  padding: 12px 14px;
+  border: 1px solid var(--preview-border);
+  tab-size: 4;
+  white-space: pre;
+}
+
+.note-rendered pre code {
+  background: transparent;
+  font-size: 0.94em;
+  line-height: 1.6;
+  font-variant-ligatures: none;
+}
+
+.note-code-block {
+  margin: 0 0 0.85em;
+}
+
+.note-code-block pre {
+  margin: 0;
+}
+
+.note-code-block figcaption {
+  width: fit-content;
+  max-width: 100%;
+  margin: 4px 0 0 auto;
+  padding: 1px 8px;
+  overflow: hidden;
+  border: 1px solid var(--preview-border);
+  border-radius: 4px;
+  background: var(--preview-code);
+  color: var(--preview-muted);
+  font:
+    0.78em 'Cascadia Mono',
+    Consolas,
+    monospace;
+  line-height: 1.6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.note-rendered :is(.hljs-keyword, .hljs-meta, .hljs-selector-tag) {
+  color: var(--code-keyword);
+}
+
+.note-rendered :is(.hljs-string, .hljs-regexp) {
+  color: var(--code-string);
+}
+
+.note-rendered :is(.hljs-number, .hljs-literal, .hljs-symbol) {
+  color: var(--code-number);
+}
+
+.note-rendered :is(.hljs-title, .hljs-type, .hljs-built_in, .hljs-attr) {
+  color: var(--code-name);
+}
+
+.note-rendered :is(.hljs-comment, .hljs-quote) {
+  color: var(--code-comment);
+}
+
+.note-rendered p code {
+  padding: 0.1em 0.3em;
+}
+
+.note-rendered blockquote {
+  padding-left: 12px;
+  border-left: 3px solid var(--preview-border);
+  color: var(--preview-muted);
+}
+
+.note-rendered table {
+  border-collapse: collapse;
+}
+
+.note-rendered :where(td, th) {
+  padding: 4px 8px;
+  border: 1px solid var(--preview-border);
+}
+
+.note-rendered hr {
+  border: 0;
+  border-top: 1px solid var(--preview-border);
+}
+
+.note-view-bar,
+.note-view-switch,
+.note-theme-control,
+.rich-note-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 7px;
+}
+
+.note-view-bar {
+  justify-content: space-between;
+}
+
+.note-view-switch button,
+.note-theme-control select {
+  padding: 3px 9px;
+  border: 1px solid var(--menu-highlight);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.note-view-switch button[aria-pressed='true'],
+.note-view-switch button:hover {
+  background: var(--menu-highlight);
+}
+
+.note-theme-control {
+  color: var(--muted);
+  font-size: 0.86em;
+}
+
+.note-theme-control select {
+  background: var(--menu-surface);
+}
+
+.note-visual,
+.rich-note {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.rich-note-toolbar {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--preview-border);
+  background: var(--preview-code);
+  font-size: 0.87rem;
+}
+
+.rich-note button,
+.rich-note select,
+.rich-note input {
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--preview-background);
+  color: inherit;
+  font: inherit;
+}
+
+.rich-note select,
+.rich-note input,
+.rich-note button:hover,
+.rich-note button[aria-pressed='true'] {
+  border-color: var(--preview-border);
+}
+
+.rich-note button[aria-pressed='true'] {
+  background: var(--preview-code);
+}
+
+.rich-note :focus-visible {
+  outline-color: var(--code-name);
+}
+
+.rich-note-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.rich-note-outline {
+  flex: 0 0 clamp(6rem, 22%, 14rem);
+  padding: 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--preview-border);
+  font-size: 0.9rem;
+}
+
+.rich-note-outline button {
+  display: block;
+  width: 100%;
+  padding-inline-start: calc(6px + var(--heading-indent) * 6px);
+  overflow: hidden;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-note-document {
+  min-width: 0;
+  padding: 0;
+}
+
+.rich-note-document .tiptap {
+  position: relative;
+  min-height: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+  padding: clamp(14px, 3vw, 32px);
+  outline: 0;
+  white-space: break-spaces;
+}
+
+.rich-note-document .tiptap [contenteditable='false'] {
+  white-space: normal;
+}
+
+.rich-note-document .tiptap .ProseMirror-separator {
+  display: inline;
+  width: 0;
+  height: 0;
+}
+
+.rich-note-document .ProseMirror-gapcursor {
+  display: none;
+  position: absolute;
+  width: 1.25rem;
+  border-top: 1px solid currentColor;
+  pointer-events: none;
+}
+
+.rich-note-document .ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+
+.rich-note-document .ProseMirror-hideselection *::selection {
+  background: transparent;
+}
+
+.rich-note-document .ProseMirror-hideselection * {
+  caret-color: transparent;
+}
+
+.rich-note-document .tiptap :last-child {
+  margin-block-end: 0;
+}
+
+.rich-note-document .tiptap pre [data-node-view-content] {
+  white-space: inherit;
+}
+
+.rich-note-document .note-code-block figcaption {
+  padding: 0;
+}
+
+.rich-note-document figcaption select {
+  max-width: 100%;
+  border: 0;
+  background: transparent;
+}
+
+.rich-note-document a {
+  color: var(--code-name);
+}
+
+.rich-note-document img {
+  max-width: 100%;
+  height: auto;
+}
+
+.rich-note-document ul[data-type='taskList'] {
+  padding-inline-start: 0;
+  list-style: none;
+}
+
+.rich-note-document li[data-type='taskItem'] {
+  display: flex;
+  gap: 6px;
+}
+
+.rich-note-document th {
+  background: var(--preview-code);
+}
+
+.rich-note-document .selectedCell {
+  outline: 1px solid var(--code-name);
+  outline-offset: -1px;
+}

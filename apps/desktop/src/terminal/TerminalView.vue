@@ -2,6 +2,7 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core'
 import {
   computed,
+  defineAsyncComponent,
   nextTick,
   onMounted,
   onUnmounted,
@@ -10,7 +11,6 @@ import {
 } from 'vue'
 import BackgroundPicker from '../features/appearance/BackgroundPicker.vue'
 import DodgeGame from '../features/games/DodgeGame.vue'
-import NoteEditor from '../features/notes/NoteEditor.vue'
 import RemovalDialog from '../components/RemovalDialog.vue'
 import RunnerGame from '../features/games/RunnerGame.vue'
 import SnakeGame from '../features/games/SnakeGame.vue'
@@ -21,6 +21,7 @@ import type {
   DesktopCommand,
   GameId,
   NoteDraft,
+  NoteFormat,
   TextDraft,
 } from './command-types'
 import {
@@ -28,6 +29,7 @@ import {
   executeAppearance,
   executeDirectory,
   executeNote,
+  executeStore,
   executeWelcome,
   runDesktopCommand,
 } from '../platform/desktop-platform'
@@ -62,6 +64,9 @@ type TranscriptEntry = {
   launching: boolean
 }
 
+const NoteEditor = defineAsyncComponent(
+  () => import('../features/notes/NoteEditor.vue'),
+)
 const desktop = isTauri()
 const input = useTemplateRef<HTMLInputElement>('terminal-input')
 const screen = useTemplateRef<HTMLElement>('terminal-screen')
@@ -81,7 +86,8 @@ const pickerError = ref('')
 const activeNote = ref<NoteDraft>()
 const activeFile = ref<{ draft: TextDraft; entryId: number }>()
 type PendingRemoval = { entryId: number } & (
-  { kind: 'note'; title: string } | { kind: 'file'; id: number; path: string }
+  | { kind: 'note'; title: string; format: NoteFormat }
+  | { kind: 'file'; id: number; path: string }
 )
 const pendingRemoval = ref<PendingRemoval>()
 const modalOpen = computed(() =>
@@ -107,6 +113,7 @@ const pendingOutput: Record<DesktopCommand['type'], string> = {
   directory: '正在处理目录命令…',
   note: '正在处理笔记…',
   ping: '正在等待 Ping 结果…',
+  store: '正在处理存储目录，迁移文件可能需要一点时间…',
   timer: '正在设置倒计时…',
   todo: '正在处理待办…',
   search: '正在处理搜索请求…',
@@ -197,6 +204,7 @@ function finishRemoval(confirmed: boolean) {
         const outcome = await executeNote({
           action: 'remove',
           title: removal.title,
+          format: removal.format,
           confirmed: true,
         })
         if (outcome.type !== 'message') throw new Error('无法确认笔记已删除。')
@@ -314,6 +322,7 @@ function dispatchCommand(command: string, previousHistory: readonly string[]) {
       result.type === 'background' ||
       result.type === 'directory' ||
       result.type === 'note' ||
+      result.type === 'store' ||
       result.type === 'todo' ||
       result.type === 'welcome'
     )
@@ -414,10 +423,26 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
           entryId: id,
           kind: 'note',
           title: outcome.title,
+          format: outcome.format,
         }
         output = '等待确认删除笔记「' + outcome.title + '」。'
       } else {
         output = outcome.text
+      }
+    } else if (command.type === 'store') {
+      if (
+        command.operation.action !== 'get' &&
+        (modalOpen.value || pickerOpen.value)
+      )
+        throw new Error('请先完成当前操作。')
+      const outcome = await executeStore(command.operation)
+      output = outcome.text
+      if (outcome.changed) {
+        try {
+          appearance.value = await executeAppearance({ action: 'get' })
+        } catch {
+          output += '\n存储位置已切换，暂时无法刷新背景。'
+        }
       }
     } else if (command.type === 'welcome') {
       welcomeMessage.value =

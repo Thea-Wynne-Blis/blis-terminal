@@ -133,9 +133,14 @@ fn valid_title(title: &str) -> Result<&str, &'static str> {
 
 #[tauri::command]
 pub async fn execute_todo(app: AppHandle, operation: TodoOperation) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<TodoStore>().execute(operation))
-        .await
-        .map_err(|_| "无法处理待办请求。".to_owned())?
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<crate::features::storage::Storage>()
+            .stores()?
+            .todos
+            .execute(operation)
+    })
+    .await
+    .map_err(|_| "无法处理待办请求。".to_owned())?
 }
 
 #[cfg(test)]

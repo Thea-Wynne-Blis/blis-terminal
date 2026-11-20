@@ -6,6 +6,7 @@ fn main() {
         "execute_directory",
         "execute_note",
         "execute_search",
+        "execute_store",
         "execute_open_target",
         "execute_ping",
         "execute_todo",

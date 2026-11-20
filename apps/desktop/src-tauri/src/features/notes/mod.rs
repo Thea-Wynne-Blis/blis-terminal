@@ -5,14 +5,17 @@ use std::{
     sync::Mutex,
 };
 
-use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+mod markdown;
+
+use markdown::{normalize_headings, plain_text, render_markdown};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
 use tempfile::NamedTempFile;
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum NoteFormat {
+    #[default]
     Md,
     Txt,
 }
@@ -32,6 +35,8 @@ pub enum NoteOperation {
     List,
     New {
         title: String,
+        #[serde(default)]
+        format: NoteFormat,
     },
     Edit {
         title: String,
@@ -40,16 +45,22 @@ pub enum NoteOperation {
         title: String,
         #[serde(default)]
         confirmed: bool,
+        format: Option<NoteFormat>,
     },
     Save {
         title: String,
         content: String,
         create: bool,
+        #[serde(default)]
+        format: NoteFormat,
     },
     Export {
         title: String,
         format: NoteFormat,
         output: Option<PathBuf>,
+    },
+    Preview {
+        content: String,
     },
 }
 
@@ -60,12 +71,21 @@ pub enum NoteOutcome {
         title: String,
         content: String,
         create: bool,
+        format: NoteFormat,
     },
     Message {
         text: String,
     },
     ConfirmRemove {
         title: String,
+        format: NoteFormat,
+    },
+    Saved {
+        text: String,
+        content: String,
+    },
+    Preview {
+        text: String,
     },
 }
 
@@ -87,48 +107,55 @@ impl NoteStore {
         operation: NoteOperation,
         default_export_dir: Option<&Path>,
     ) -> Result<NoteOutcome, String> {
+        let operation = match operation {
+            NoteOperation::Preview { content } => {
+                return Ok(NoteOutcome::Preview {
+                    text: render_markdown(&content),
+                });
+            }
+            other => other,
+        };
         let _access = self.access.lock().map_err(|_| "笔记暂时不可用。")?;
         match operation {
             NoteOperation::List => self.list(),
-            NoteOperation::New { title } => {
+            NoteOperation::New { title, format } => {
                 let title = validate_title(&title)?;
-                if self.path(title).try_exists().map_err(file_error)? {
-                    return Err(already_exists(title));
-                }
+                self.require_available_title(title)?;
                 Ok(NoteOutcome::Editor {
                     title: title.into(),
                     content: String::new(),
                     create: true,
+                    format,
                 })
             }
             NoteOperation::Edit { title } => {
                 let title = validate_title(&title)?;
-                let content = self.read(title)?;
+                let (content, format) = self.read(title)?;
                 Ok(NoteOutcome::Editor {
                     title: title.into(),
                     content,
                     create: false,
+                    format,
                 })
             }
-            NoteOperation::Remove { title, confirmed } => {
+            NoteOperation::Remove {
+                title,
+                confirmed,
+                format,
+            } => {
                 let title = validate_title(&title)?;
-                let path = self.path(title);
-                let map_error = |error: io::Error| {
-                    if error.kind() == io::ErrorKind::NotFound {
-                        missing_note(title)
-                    } else {
-                        file_error(error)
-                    }
-                };
-                if !fs::symlink_metadata(&path).map_err(map_error)?.is_file() {
-                    return Err(missing_note(title));
-                }
                 if !confirmed {
                     return Ok(NoteOutcome::ConfirmRemove {
                         title: title.into(),
+                        format: self.find_format(title)?,
                     });
                 }
-                fs::remove_file(path).map_err(map_error)?;
+                let format = match format {
+                    Some(format) => format,
+                    None => self.find_format(title)?,
+                };
+                let path = self.require_file(title, format)?;
+                fs::remove_file(path).map_err(file_error)?;
                 Ok(NoteOutcome::Message {
                     text: format!("已删除笔记「{title}」。"),
                 })
@@ -137,14 +164,20 @@ impl NoteStore {
                 title,
                 content,
                 create,
+                format,
             } => {
                 let title = validate_title(&title)?;
-                let path = self.path(title);
-                if create {
+                let path = if create {
+                    self.require_available_title(title)?;
                     fs::create_dir_all(&self.directory).map_err(file_error)?;
-                } else if !path.try_exists().map_err(file_error)? {
-                    return Err(missing_note(title));
-                }
+                    self.path(title, format)
+                } else {
+                    self.require_file(title, format)?
+                };
+                let content = match format {
+                    NoteFormat::Md => normalize_headings(&content).into_owned(),
+                    NoteFormat::Txt => content,
+                };
                 write_text(&path, &content, !create).map_err(|error| {
                     if create && error.kind() == io::ErrorKind::AlreadyExists {
                         already_exists(title)
@@ -152,8 +185,9 @@ impl NoteStore {
                         file_error(error)
                     }
                 })?;
-                Ok(NoteOutcome::Message {
+                Ok(NoteOutcome::Saved {
                     text: format!("已保存笔记「{title}」。"),
+                    content,
                 })
             }
             NoteOperation::Export {
@@ -162,7 +196,7 @@ impl NoteStore {
                 output,
             } => {
                 let title = validate_title(&title)?;
-                let markdown = self.read(title)?;
+                let (content, source_format) = self.read(title)?;
                 let extension = format.extension();
                 let path = match output {
                     Some(path) => {
@@ -185,9 +219,9 @@ impl NoteStore {
                         directory.join(format!("{title}.{extension}"))
                     }
                 };
-                let content = match format {
-                    NoteFormat::Md => markdown,
-                    NoteFormat::Txt => plain_text(&markdown),
+                let content = match (source_format, format) {
+                    (NoteFormat::Md, NoteFormat::Txt) => plain_text(&content),
+                    _ => content,
                 };
                 write_text(&path, &content, false).map_err(|error| {
                     if error.kind() == io::ErrorKind::AlreadyExists {
@@ -203,21 +237,58 @@ impl NoteStore {
                     text: format!("已导出到 {}", path.display()),
                 })
             }
+            NoteOperation::Preview { .. } => unreachable!("handled before locking"),
         }
     }
 
-    fn path(&self, title: &str) -> PathBuf {
-        self.directory.join(format!("{title}.md"))
+    fn path(&self, title: &str, format: NoteFormat) -> PathBuf {
+        self.directory
+            .join(format!("{title}.{}", format.extension()))
     }
 
-    fn read(&self, title: &str) -> Result<String, String> {
-        fs::read_to_string(self.path(title)).map_err(|error| {
-            if error.kind() == io::ErrorKind::NotFound {
-                missing_note(title)
-            } else {
-                file_error(error)
-            }
-        })
+    fn has_entry(&self, title: &str, format: NoteFormat) -> Result<bool, String> {
+        match fs::symlink_metadata(self.path(title, format)) {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(error) => Err(file_error(error)),
+        }
+    }
+
+    fn require_available_title(&self, title: &str) -> Result<(), String> {
+        if self.has_entry(title, NoteFormat::Md)? || self.has_entry(title, NoteFormat::Txt)? {
+            return Err(already_exists(title));
+        }
+        Ok(())
+    }
+
+    fn find_format(&self, title: &str) -> Result<NoteFormat, String> {
+        match (
+            self.has_entry(title, NoteFormat::Md)?,
+            self.has_entry(title, NoteFormat::Txt)?,
+        ) {
+            (true, false) => Ok(NoteFormat::Md),
+            (false, true) => Ok(NoteFormat::Txt),
+            (false, false) => Err(missing_note(title)),
+            (true, true) => Err(format!(
+                "「{title}」同时有 MD 和 TXT 文件，请先在笔记目录中调整其中一个文件的名称。"
+            )),
+        }
+    }
+
+    fn require_file(&self, title: &str, format: NoteFormat) -> Result<PathBuf, String> {
+        let path = self.path(title, format);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_file() => Ok(path),
+            Ok(_) => Err(format!("「{}」不是普通笔记文件。", path.display())),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Err(missing_note(title)),
+            Err(error) => Err(file_error(error)),
+        }
+    }
+
+    fn read(&self, title: &str) -> Result<(String, NoteFormat), String> {
+        let format = self.find_format(title)?;
+        let content = fs::read_to_string(self.require_file(title, format)?).map_err(file_error)?;
+        Ok((content, format))
     }
 
     fn list(&self) -> Result<NoteOutcome, String> {
@@ -230,8 +301,10 @@ impl NoteStore {
                         continue;
                     }
                     let name = entry.file_name();
-                    if let Some(title) = name.to_str().and_then(|name| name.strip_suffix(".md")) {
-                        titles.push(title.to_owned());
+                    if let Some((title, format @ ("md" | "txt"))) =
+                        name.to_str().and_then(|name| name.rsplit_once('.'))
+                    {
+                        titles.push(format!("{title}  [{format}]"));
                     }
                 }
             }
@@ -309,32 +382,14 @@ fn write_text(path: &Path, content: &str, replace: bool) -> io::Result<()> {
     Ok(())
 }
 
-fn plain_text(markdown: &str) -> String {
-    let mut output = String::new();
-    let options = Options::ENABLE_STRIKETHROUGH | Options::ENABLE_TASKLISTS;
-    for event in Parser::new_ext(markdown, options) {
-        match event {
-            Event::Text(text) | Event::Code(text) => output.push_str(&text),
-            Event::Start(Tag::Item) => {
-                if !output.is_empty() && !output.ends_with('\n') {
-                    output.push('\n');
-                }
-                output.push_str("- ");
-            }
-            Event::TaskListMarker(done) => output.push_str(if done { "[x] " } else { "[ ] " }),
-            Event::SoftBreak | Event::HardBreak | Event::Rule => output.push('\n'),
-            Event::End(
-                TagEnd::Heading(_) | TagEnd::Paragraph | TagEnd::CodeBlock | TagEnd::Item,
-            ) if !output.ends_with('\n') => output.push('\n'),
-            _ => {}
-        }
-    }
-    output
-}
-
 #[tauri::command]
 pub async fn execute_note(app: AppHandle, operation: NoteOperation) -> Result<NoteOutcome, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        if let NoteOperation::Preview { content } = operation {
+            return Ok(NoteOutcome::Preview {
+                text: render_markdown(&content),
+            });
+        }
         let default_export_dir = match &operation {
             NoteOperation::Export { output: None, .. } => app
                 .path()
@@ -343,7 +398,9 @@ pub async fn execute_note(app: AppHandle, operation: NoteOperation) -> Result<No
                 .map(|dir| dir.join("Blis Notes")),
             _ => None,
         };
-        app.state::<NoteStore>()
+        app.state::<super::storage::Storage>()
+            .stores()?
+            .notes
             .execute(operation, default_export_dir.as_deref())
     })
     .await
@@ -354,6 +411,63 @@ pub async fn execute_note(app: AppHandle, operation: NoteOperation) -> Result<No
 mod tests {
     use super::*;
     use NoteOperation::*;
+
+    #[test]
+    fn preview_normalizes_headings_and_keeps_code_and_raw_html_inert() {
+        let source = "##这是二级标题\n\n~~~\n##原样代码\n~~~\n\n<img src=x onerror=alert(1)>\n";
+        let markdown = normalize_headings(source);
+        assert!(markdown.starts_with("## 这是二级标题\n"));
+        assert!(markdown.contains("~~~\n##原样代码\n~~~"));
+        let preview = render_markdown(source);
+        assert!(preview.contains("<h2>这是二级标题</h2>"));
+        assert!(preview.contains("##原样代码"));
+        assert!(!preview.contains("<img"));
+        assert!(!render_markdown("[点这里](javascript:alert%281%29)").contains("href="));
+    }
+
+    #[test]
+    fn reopens_and_exports_plain_text_without_markdown_conversion() {
+        let root = tempfile::tempdir().unwrap();
+        let store = NoteStore::new(root.path().join("notes"));
+        let title = "纯文本".to_owned();
+        let content = "##原样记录\n**保留符号**\n".to_owned();
+        store
+            .execute(
+                Save {
+                    title: title.clone(),
+                    content: content.clone(),
+                    create: true,
+                    format: NoteFormat::Txt,
+                },
+                None,
+            )
+            .unwrap();
+        assert!(matches!(
+            store.execute(Edit { title: title.clone() }, None).unwrap(),
+            NoteOutcome::Editor { content: text, format: NoteFormat::Txt, .. } if text == content
+        ));
+        assert!(store
+            .execute(
+                New {
+                    title: title.clone(),
+                    format: NoteFormat::Md
+                },
+                None
+            )
+            .is_err());
+        let output = root.path().join("导出.txt");
+        store
+            .execute(
+                Export {
+                    title,
+                    format: NoteFormat::Txt,
+                    output: Some(output.clone()),
+                },
+                None,
+            )
+            .unwrap();
+        assert_eq!(fs::read_to_string(output).unwrap(), content);
+    }
 
     #[test]
     fn removes_only_after_confirmation() {
@@ -367,6 +481,7 @@ mod tests {
                     title: title.clone(),
                     content: "计划正文".into(),
                     create: true,
+                    format: NoteFormat::Md,
                 },
                 None,
             )
@@ -377,7 +492,7 @@ mod tests {
         let request = serde_json::json!({ "action": "remove", "title": title });
         assert!(matches!(
             store.execute(serde_json::from_value(request).unwrap(), None).unwrap(),
-            NoteOutcome::ConfirmRemove { title: pending } if pending == title
+            NoteOutcome::ConfirmRemove { title: pending, .. } if pending == title
         ));
         assert_eq!(
             fs::read_to_string(storage.join("项目 计划.md")).unwrap(),
@@ -387,6 +502,7 @@ mod tests {
         let remove = || Remove {
             title: title.clone(),
             confirmed: true,
+            format: Some(NoteFormat::Md),
         };
         assert!(matches!(
             store.execute(remove(), None).unwrap(),
@@ -408,11 +524,20 @@ mod tests {
             title: title(),
             content: content.into(),
             create,
+            format: NoteFormat::Md,
         };
         let original = "# 计划\n\n- **任务** [链接](https://example.com)\n- 完成 `demo`\n";
 
         assert!(matches!(
-            store.execute(New { title: title() }, None).unwrap(),
+            store
+                .execute(
+                    New {
+                        title: title(),
+                        format: NoteFormat::Md
+                    },
+                    None
+                )
+                .unwrap(),
             NoteOutcome::Editor { create: true, .. }
         ));
         assert!(!storage.exists());
@@ -422,7 +547,7 @@ mod tests {
 
         let reopened = NoteStore::new(storage);
         assert!(
-            matches!(reopened.execute(List, None).unwrap(), NoteOutcome::Message { text } if text == title())
+            matches!(reopened.execute(List, None).unwrap(), NoteOutcome::Message { text } if text == format!("{}  [md]", title()))
         );
         assert!(
             matches!(reopened.execute(Edit { title: title() }, None).unwrap(), NoteOutcome::Editor { content, create: false, .. } if content == original)

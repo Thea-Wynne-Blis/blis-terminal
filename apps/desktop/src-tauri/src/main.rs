@@ -9,7 +9,7 @@ use features::{
     aliases,
     appearance::{background, welcome},
     files::{directories, open_targets},
-    notes, ping, search_settings,
+    notes, ping, search_settings, storage,
     tasks::{timers, todos},
 };
 
@@ -57,6 +57,7 @@ fn main() {
             open_targets::execute_open_target,
             ping::execute_ping,
             search_settings::execute_search,
+            storage::execute_store,
             timers::start_timer,
             todos::execute_todo,
             welcome::execute_welcome
@@ -77,23 +78,10 @@ fn main() {
                 Err(_) => std::env::current_dir()?,
             };
             app.manage(directories::DirectoryStore::new(home));
-            let config_directory = app.path().app_config_dir()?;
-            app.manage(notes::NoteStore::new(config_directory.join("notes")));
-            app.manage(aliases::AliasStore::new(
-                config_directory.join("aliases.json"),
-            ));
-            app.manage(open_targets::OpenTargets::new(
-                config_directory.join("open-targets.json"),
-            ));
-            app.manage(search_settings::SearchStore::new(
-                config_directory.join("search-settings.json"),
-            ));
-            app.manage(todos::TodoStore::new(config_directory.join("todos.json")));
-            app.manage(welcome::WelcomeStore::new(
-                config_directory.join("welcome.json"),
-            ));
+            let storage = storage::Storage::new(&app.path().app_config_dir()?)?;
+            storage.allow_backgrounds(app.handle())?;
+            app.manage(storage);
             app.manage(timers::TimerNotices::default());
-            app.manage(background::AppearanceStore::new(config_directory));
             lifecycle::create_tray(app.handle())?;
             app.manage(RegisteredShortcut(lifecycle::register_shortcut(
                 app.handle(),

@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeMap,
     fs::{self, File},
-    io::{self, Read, Write},
+    io::{self, Read, Seek},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -117,10 +117,9 @@ impl AppearanceStore {
             }
             AppearanceOperation::AddImage { name, path } => {
                 let name = new_theme_id(&config, &name)?;
-                let (extension, data) = read_image(Path::new(&path))?;
+                let (extension, source) = open_image(Path::new(&path))?;
                 let path = self.image_path(&name, extension);
-                save_image(&path, &data)
-                    .map_err(|error| format!("无法复制背景图片（{error}）。"))?;
+                save_image(&path, source)?;
                 imported_path = Some(path);
                 config.custom.insert(
                     name,
@@ -290,38 +289,45 @@ fn normalize_color(color: &str) -> Result<String, &'static str> {
     Ok(color.to_ascii_uppercase())
 }
 
-fn read_image(path: &Path) -> Result<(&'static str, Vec<u8>), String> {
+fn open_image(path: &Path) -> Result<(&'static str, File), String> {
     if !path.is_absolute() || !path.is_file() {
         return Err("请输入存在的图片绝对路径。".to_owned());
     }
-    let mut data = Vec::new();
-    File::open(path)
-        .and_then(|file| file.take(MAX_IMAGE_BYTES + 1).read_to_end(&mut data))
-        .map_err(|error| format!("无法读取背景图片（{error}）。"))?;
-    if data.len() as u64 > MAX_IMAGE_BYTES {
+    let read_error = |error| format!("无法读取背景图片（{error}）。");
+    let mut file = File::open(path).map_err(read_error)?;
+    if file.metadata().map_err(read_error)?.len() > MAX_IMAGE_BYTES {
         return Err("单张背景图片最大为 16 MiB。".to_owned());
     }
-    let extension = if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+    let mut header = Vec::with_capacity(12);
+    (&mut file)
+        .take(12)
+        .read_to_end(&mut header)
+        .map_err(read_error)?;
+    let extension = if header.starts_with(b"\x89PNG\r\n\x1a\n") {
         "png"
-    } else if data.starts_with(b"\xff\xd8\xff") {
+    } else if header.starts_with(b"\xff\xd8\xff") {
         "jpg"
-    } else if data.starts_with(b"RIFF") && data.get(8..12) == Some(b"WEBP") {
+    } else if header.starts_with(b"RIFF") && header.get(8..12) == Some(b"WEBP") {
         "webp"
     } else {
         return Err("背景图片须为 PNG、JPEG 或 WebP 格式。".to_owned());
     };
-    Ok((extension, data))
+    file.rewind().map_err(read_error)?;
+    Ok((extension, file))
 }
 
-fn save_image(path: &Path, data: &[u8]) -> io::Result<()> {
-    let parent = path
-        .parent()
-        .ok_or_else(|| io::Error::other("missing backgrounds directory"))?;
-    fs::create_dir_all(parent)?;
-    let mut temp = NamedTempFile::new_in(parent)?;
-    temp.write_all(data)?;
-    temp.as_file().sync_all()?;
-    temp.persist(path)?;
+fn save_image(path: &Path, source: File) -> Result<(), String> {
+    let copy_error = |error| format!("无法复制背景图片（{error}）。");
+    let parent = path.parent().ok_or("找不到背景图片目录。")?;
+    fs::create_dir_all(parent).map_err(copy_error)?;
+    let mut temp = NamedTempFile::new_in(parent).map_err(copy_error)?;
+    let copied = io::copy(&mut source.take(MAX_IMAGE_BYTES + 1), &mut temp).map_err(copy_error)?;
+    if copied > MAX_IMAGE_BYTES {
+        return Err("单张背景图片最大为 16 MiB。".to_owned());
+    }
+    temp.as_file().sync_all().map_err(copy_error)?;
+    temp.persist(path)
+        .map_err(|error| copy_error(error.error))?;
     Ok(())
 }
 
@@ -338,9 +344,14 @@ pub async fn execute_appearance(
     app: AppHandle,
     operation: AppearanceOperation,
 ) -> Result<Appearance, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppearanceStore>().execute(operation))
-        .await
-        .map_err(|_| "无法处理背景配置。".to_owned())?
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<crate::features::storage::Storage>()
+            .stores()?
+            .appearance
+            .execute(operation)
+    })
+    .await
+    .map_err(|_| "无法处理背景配置。".to_owned())?
 }
 
 #[cfg(test)]

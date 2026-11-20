@@ -465,6 +465,23 @@ describe('command aliases', () => {
   })
 })
 
+describe('data directory commands', () => {
+  it('keeps a quoted Windows path and offers a reset to the default', () => {
+    expect(executeTerminalInput('store', [])).toEqual({
+      type: 'store',
+      operation: { action: 'get' },
+    })
+    expect(executeTerminalInput('store set "D:\\Blis 数据"', [])).toEqual({
+      type: 'store',
+      operation: { action: 'set', path: 'D:\\Blis 数据' },
+    })
+    expect(executeTerminalInput('store reset', [])).toEqual({
+      type: 'store',
+      operation: { action: 'reset' },
+    })
+  })
+})
+
 describe('command completion', () => {
   it.each([
     ['se', 'search'],
@@ -488,7 +505,10 @@ describe('command completion', () => {
       caret: 12,
     })
     if (!next) throw new Error('Expected a second match')
-    expect(completeCommand(next.value, next.caret, next)).toEqual(first)
+    const third = completeCommand(next.value, next.caret, next)
+    expect(third).toMatchObject({ value: '  store  bilibili csgo', caret: 9 })
+    if (!third) throw new Error('Expected a third match')
+    expect(completeCommand(third.value, third.caret, third)).toEqual(first)
     expect(completeCommand('op', 2, next)).toMatchObject({ value: 'open ' })
     expect(completeCommand(next.value, next.value.length, next)).toBeUndefined()
   })

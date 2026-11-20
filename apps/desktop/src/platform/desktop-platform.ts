@@ -10,6 +10,7 @@ import type {
   NoteOutcome,
   OpenOperation,
   OpenTargetKind,
+  StoreOperation,
   WelcomeOperation,
 } from '../terminal/command-types'
 
@@ -52,6 +53,14 @@ export function executeNote(operation: NoteOperation): Promise<NoteOutcome> {
   if (!isTauri())
     return Promise.reject(new Error('请在 Blis 桌面版中执行此命令。'))
   return invoke('execute_note', { operation })
+}
+
+export function executeStore(
+  operation: StoreOperation,
+): Promise<{ text: string; changed: boolean }> {
+  if (!isTauri())
+    return Promise.reject(new Error('请在 Blis 桌面版中执行此命令。'))
+  return invoke('execute_store', { operation })
 }
 
 export function executeWelcome(
@@ -127,7 +136,9 @@ async function executeOpenOperation(operation: OpenOperation): Promise<string> {
 export async function runDesktopCommand(
   command: Exclude<
     DesktopCommand,
-    { type: 'alias' | 'background' | 'directory' | 'note' | 'welcome' }
+    {
+      type: 'alias' | 'background' | 'directory' | 'note' | 'store' | 'welcome'
+    }
   >,
 ): Promise<string> {
   if (!isTauri()) throw new Error('请在 Blis 桌面版中执行此命令。')

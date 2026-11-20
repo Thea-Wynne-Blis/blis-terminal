@@ -44,19 +44,34 @@ export type NoteFormat = 'md' | 'txt'
 
 export type NoteCommand =
   | { action: 'list' }
-  | { action: 'new' | 'edit' | 'remove'; title: string }
+  | { action: 'new'; title: string; format?: NoteFormat }
+  | { action: 'edit' | 'remove'; title: string }
   | { action: 'export'; title: string; format: NoteFormat; output?: string }
 
 export type NoteOperation =
   | NoteCommand
-  | { action: 'save'; title: string; content: string; create: boolean }
-  | { action: 'remove'; title: string; confirmed: true }
+  | {
+      action: 'save'
+      title: string
+      content: string
+      create: boolean
+      format: NoteFormat
+    }
+  | { action: 'remove'; title: string; confirmed: true; format: NoteFormat }
+  | { action: 'preview'; content: string }
 
-export type NoteDraft = { title: string; content: string; create: boolean }
+export type NoteDraft = {
+  title: string
+  content: string
+  create: boolean
+  format: NoteFormat
+}
 
 export type NoteOutcome =
   | ({ type: 'editor' } & NoteDraft)
-  | { type: 'confirm_remove'; title: string }
+  | { type: 'confirm_remove'; title: string; format: NoteFormat }
+  | { type: 'saved'; text: string; content: string }
+  | { type: 'preview'; text: string }
   | { type: 'message'; text: string }
 
 export type AliasOperation =
@@ -118,6 +133,9 @@ export type TodoOperation =
   | { action: 'list' }
   | { action: 'done'; id: number }
 
+export type StoreOperation =
+  { action: 'get' | 'reset' } | { action: 'set'; path: string }
+
 export type DesktopCommand =
   | { type: 'alias'; operation: AliasOperation }
   | { type: 'directory'; operation: DirectoryOperation }
@@ -129,6 +147,7 @@ export type DesktopCommand =
   | { type: 'todo'; operation: TodoOperation }
   | { type: 'welcome'; operation: WelcomeOperation }
   | { type: 'ping'; operation: { host: string; count: number } }
+  | { type: 'store'; operation: StoreOperation }
   | { type: 'exit' }
 
 export type GameId = 'snake' | 'runner' | 'dodge'

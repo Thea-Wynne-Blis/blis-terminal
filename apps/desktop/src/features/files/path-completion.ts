@@ -10,6 +10,7 @@ const pathSlots = new Map<
   ['code', { count: 1, directoriesOnly: false }],
   ['cat', { count: 1, directoriesOnly: false }],
   ['vim', { count: 1, directoriesOnly: false }],
+  ['store set', { count: 1, directoriesOnly: true }],
   ['mkdir', { count: 1, directoriesOnly: true, options: true }],
   ['cp', { count: 2, directoriesOnly: false, options: true }],
   ['mv', { count: 2, directoriesOnly: false, options: true }],
@@ -36,9 +37,9 @@ export function pathContext(
   line: string,
   caret: number,
 ): PathContext | undefined {
-  const head = /^\s*(\S+)\s/u.exec(line)
+  const head = /^\s*(store\s+set|\S+)\s/iu.exec(line)
   if (!head || caret < head[0].length) return
-  const command = head[1].toLowerCase()
+  const command = head[1].toLowerCase().replace(/\s+/gu, ' ')
   const slots = pathSlots.get(command)
   if (!slots) return
 

@@ -119,9 +119,14 @@ pub async fn execute_alias(
     app: AppHandle,
     operation: AliasOperation,
 ) -> Result<BTreeMap<String, String>, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<AliasStore>().execute(operation))
-        .await
-        .map_err(|_| "无法处理别名请求。".to_owned())?
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<super::storage::Storage>()
+            .stores()?
+            .aliases
+            .execute(operation)
+    })
+    .await
+    .map_err(|_| "无法处理别名请求。".to_owned())?
 }
 
 #[cfg(test)]

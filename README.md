@@ -2,7 +2,7 @@
 
 一款 Windows 上的个人命令终端：常驻托盘，`Alt+Space` 随时唤出，在 `blis>` 提示符下管理目录、文件、笔记，搜索网页，保存常用应用。
 
-内置命令：`help` `search` `open` `pwd` `cd` `ls` `code` `cat` `vim` `mkdir` `cp` `mv` `rm` `background` `welcome` `alias` `calc` `date` `timer` `pick` `ping` `todo` `game` `note` `history` `clear` `version` `shortcut` `echo` `exit`。
+内置命令：`help` `search` `open` `pwd` `cd` `ls` `code` `cat` `vim` `mkdir` `cp` `mv` `rm` `background` `welcome` `alias` `calc` `date` `timer` `pick` `ping` `todo` `game` `note` `store` `history` `clear` `version` `shortcut` `echo` `exit`。
 每条命令都支持 `help <命令>` 或 `<命令> --help`。
 
 `game list` 查看当前可玩的游戏，`game <name>` 开始游戏。`game snake` 用方向键或 WASD 移动，空格暂停。`game runner` 用空格或 ↑ 跳跃，跑过的距离计入成绩。`game dodge` 用 ←／→ 或 A／D 左右移动，按躲过的掉落物计分。跑酷和躲避都用 P 暂停或继续。三款游戏隐藏窗口后会暂停，结束后按 R 重开，Esc 返回命令行，最高纪录保存在本机。
@@ -12,6 +12,8 @@
 - `cat README.md` 在终端预览 UTF-8 文本。长文件只显示开头。
 - `vim README.md` 打开内置编辑器。按 i 编辑，按 Esc 回到普通模式，再输入 `:w` 保存、`:q` 退出、`:wq` 保存并退出或 `:q!` 放弃退出。
 - `ping example.com -c 3` 检查主机连通性。支持 IP 和主机名，默认发送 4 次。
+- `note new "项目计划" -f md` 创建 Markdown 笔记，可在可视化、源码和分栏之间切换。可视化编辑支持常用格式、任务清单、表格、大纲和多语言代码高亮。`note new "临时记录" -f txt` 创建纯文本笔记。用 `note edit "项目计划"` 重新打开，按 Ctrl+S 保存。
+- `store` 查看当前数据目录。`store set "D:\Blis 数据"` 把 Blis 管理的数据迁到空目录，逐个核对文件后才切换目录并删除旧数据。`store reset` 迁回默认目录。目录位置保存在 `%APPDATA%\dev.blis.terminal\store-location.json`。
 
 - `timer 25m "写代码"` 设置后台倒计时。单位为 `d`、`h`、`m`、`s`，隐藏到托盘后仍会在到点时弹出提醒。
 - `pick 火锅 烧烤 拉面` 从给定选项里随机选一个。选项名含空格时加引号。

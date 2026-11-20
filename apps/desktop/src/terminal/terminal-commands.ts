@@ -19,8 +19,12 @@ import { noteDefinition } from '../features/notes/note-command'
 import { openDefinition } from '../features/files/open-command'
 import { pickDefinition } from '../features/tools/pick-command'
 import { pingDefinition } from '../features/tools/ping-command'
-import { catDefinition, vimDefinition } from '../features/files/text-file-command'
+import {
+  catDefinition,
+  vimDefinition,
+} from '../features/files/text-file-command'
 import { searchDefinition } from '../features/search/search-command'
+import { storeDefinition } from '../features/files/store-command'
 import { describeShortcuts } from './terminal-keyboard'
 import { timerDefinition } from '../features/tasks/timer-command'
 import { todoDefinition } from '../features/tasks/todo-command'
@@ -74,6 +78,7 @@ const commands = new Map<string, CommandDefinition>([
       run: () => ({ type: 'text', text: describeShortcuts() }),
     },
   ],
+  ['store', storeDefinition],
   [
     'exit',
     {

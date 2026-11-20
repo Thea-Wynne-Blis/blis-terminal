@@ -234,9 +234,14 @@ pub async fn execute_open_target(
     app: AppHandle,
     operation: OpenOperation,
 ) -> Result<OpenOutcome, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<OpenTargets>().execute(operation))
-        .await
-        .map_err(|_| "无法处理打开清单。".to_owned())?
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<crate::features::storage::Storage>()
+            .stores()?
+            .open_targets
+            .execute(operation)
+    })
+    .await
+    .map_err(|_| "无法处理打开清单。".to_owned())?
 }
 
 #[cfg(test)]

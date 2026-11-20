@@ -76,9 +76,14 @@ pub async fn execute_welcome(
     app: AppHandle,
     operation: WelcomeOperation,
 ) -> Result<Option<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<WelcomeStore>().execute(operation))
-        .await
-        .map_err(|_| "无法处理欢迎语设置。".to_owned())?
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<crate::features::storage::Storage>()
+            .stores()?
+            .welcome
+            .execute(operation)
+    })
+    .await
+    .map_err(|_| "无法处理欢迎语设置。".to_owned())?
 }
 
 #[cfg(test)]

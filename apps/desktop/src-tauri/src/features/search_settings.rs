@@ -394,9 +394,14 @@ fn has_url_scheme(value: &str) -> bool {
 
 #[tauri::command]
 pub async fn execute_search(app: AppHandle, operation: SearchOperation) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || app.state::<SearchStore>().execute(operation))
-        .await
-        .map_err(|_| "无法处理搜索请求。".to_owned())?
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<super::storage::Storage>()
+            .stores()?
+            .search
+            .execute(operation)
+    })
+    .await
+    .map_err(|_| "无法处理搜索请求。".to_owned())?
 }
 
 #[cfg(test)]
