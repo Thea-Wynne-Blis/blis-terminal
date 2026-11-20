@@ -9,7 +9,7 @@ const gameNames = Object.keys(games) as GameId[]
 
 export const gameDefinition: CommandDefinition = {
   summary: '在终端输出区玩小游戏',
-  usage: ['game list', 'game snake', 'game runner', 'game dodge'],
+  usage: ['game list    查看当前可玩的游戏', 'game <name>  开始游戏'],
   details: [
     'snake 用方向键或 WASD 移动，按空格暂停或继续。',
     'runner 用空格或 ↑ 跳跃，按 P 暂停或继续。',
