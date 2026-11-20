@@ -58,14 +58,20 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           release_flags=()
-          notes_flag=--generate-notes
+          notes_flags=(--generate-notes)
           if [[ "${TAG%%+*}" == *-* ]]; then
             release_flags+=(--prerelease)
-            notes_flag=--notes-from-tag
           fi
 
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Blis Terminal $TAG" "$notes_flag" --draft "${release_flags[@]}"
+            if (( ${#release_flags[@]} )); then
+              tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object | select(.type == "tag") | .sha')
+              if [[ -n "$tag_sha" ]]; then
+                gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_sha" --jq '.message' > release-notes.md
+                notes_flags=(--notes-file release-notes.md)
+              fi
+            fi
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Blis Terminal $TAG" "${notes_flags[@]}" --draft "${release_flags[@]}"
           fi
 
           is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
