@@ -494,14 +494,17 @@ mod tests {
         assert!(default.join(LOCATION_FILE).is_file());
 
         let reopened = Storage::new(&default).unwrap();
-        assert!(same_path(&reopened.stores().unwrap().directory, &target));
+        assert_eq!(
+            reopened.stores().unwrap().directory,
+            dunce::canonicalize(&target).unwrap()
+        );
         reopened.migrate(&default, |_| Ok(())).unwrap();
         assert!(default.join(&note).is_file());
         assert!(!target.join(NOTES).exists());
-        assert!(same_path(
-            &Storage::new(&default).unwrap().stores().unwrap().directory,
-            &default
-        ));
+        assert_eq!(
+            Storage::new(&default).unwrap().stores().unwrap().directory,
+            dunce::canonicalize(&default).unwrap()
+        );
     }
 
     #[test]
@@ -550,6 +553,9 @@ mod tests {
         );
         assert!(!default.join(LOCATION_FILE).exists());
         assert_eq!(fs::read_dir(target).unwrap().count(), 0);
-        assert!(same_path(&storage.stores().unwrap().directory, &default));
+        assert_eq!(
+            storage.stores().unwrap().directory,
+            dunce::canonicalize(&default).unwrap()
+        );
     }
 }
