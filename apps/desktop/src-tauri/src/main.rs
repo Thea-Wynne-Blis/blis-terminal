@@ -1,18 +1,17 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod aliases;
-mod app_start;
-mod appearance;
-mod config_file;
-mod desktop_open;
-mod directories;
-mod directory_listing;
-mod file_operations;
-mod lifecycle;
-mod notes;
-mod open_targets;
-mod search_settings;
-mod web_url;
+mod app;
+mod features;
+mod platform;
+
+use app::lifecycle;
+use features::{
+    aliases,
+    appearance::{background, welcome},
+    files::{directories, open_targets},
+    notes, search_settings,
+    tasks::{timers, todos},
+};
 
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State, WindowEvent};
@@ -51,18 +50,21 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             active_shortcut,
             aliases::execute_alias,
-            appearance::execute_appearance,
+            background::execute_appearance,
             directories::execute_directory,
             exit_app,
             notes::execute_note,
             open_targets::execute_open_target,
-            search_settings::execute_search
+            search_settings::execute_search,
+            timers::start_timer,
+            todos::execute_todo,
+            welcome::execute_welcome
         ])
         .on_window_event(|window, event| {
             if window.label() == lifecycle::TERMINAL_LABEL {
                 if let WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
-                    if let Err(error) = window.hide() {
+                    if let Err(error) = lifecycle::hide_terminal(window.app_handle()) {
                         eprintln!("Failed to hide terminal: {error}");
                     }
                 }
@@ -85,7 +87,12 @@ fn main() {
             app.manage(search_settings::SearchStore::new(
                 config_directory.join("search-settings.json"),
             ));
-            app.manage(appearance::AppearanceStore::new(config_directory));
+            app.manage(todos::TodoStore::new(config_directory.join("todos.json")));
+            app.manage(welcome::WelcomeStore::new(
+                config_directory.join("welcome.json"),
+            ));
+            app.manage(timers::TimerNotices::default());
+            app.manage(background::AppearanceStore::new(config_directory));
             lifecycle::create_tray(app.handle())?;
             app.manage(RegisteredShortcut(lifecycle::register_shortcut(
                 app.handle(),

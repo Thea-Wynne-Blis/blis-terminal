@@ -1,16 +1,21 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "terminal",
-  "description": "Read the hotkey, browse directories, manage notes, aliases, open targets and search settings, and exit Blis.",
+  "description": "Read the hotkey, browse directories, manage notes, aliases, open targets, search settings, timers, todos and the welcome message, and exit Blis.",
   "windows": ["terminal"],
   "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
     "allow-active-shortcut",
     "allow-execute-alias",
     "allow-execute-appearance",
     "allow-execute-directory",
     "allow-execute-note",
     "allow-execute-open-target",
+    "allow-execute-todo",
+    "allow-execute-welcome",
     "allow-exit-app",
-    "allow-execute-search"
+    "allow-execute-search",
+    "allow-start-timer"
   ]
 }

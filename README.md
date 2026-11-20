@@ -2,8 +2,17 @@
 
 一款 Windows 上的个人命令终端：常驻托盘，`Alt+Space` 随时唤出，在 `blis>` 提示符下管理目录、文件、笔记，搜索网页，保存常用应用。
 
-内置命令：`help` `search` `open` `pwd` `cd` `ls` `mkdir` `cp` `mv` `rm` `background` `alias` `calc` `date` `note` `history` `clear` `version` `shortcut` `echo` `exit`。
+内置命令：`help` `search` `open` `pwd` `cd` `ls` `code` `mkdir` `cp` `mv` `rm` `background` `welcome` `alias` `calc` `date` `timer` `pick` `todo` `game` `note` `history` `clear` `version` `shortcut` `echo` `exit`。
 每条命令都支持 `help <命令>` 或 `<命令> --help`。
+
+`game list` 查看终端里的小游戏。`game snake` 用方向键或 WASD 移动，空格暂停。`game runner` 用空格或 ↑ 跳跃，跑过的距离计入成绩。`game dodge` 用 ←／→ 或 A／D 左右移动，按躲过的掉落物计分。跑酷和躲避都用 P 暂停或继续。三款游戏隐藏窗口后会暂停，结束后按 R 重开，Esc 返回命令行，最高纪录保存在本机。
+
+输入 `code .` 可在 VS Code 中打开 Blis 的当前目录。`code README.md` 打开当前目录下的文件，路径含空格时用引号包住。输入部分路径后可按 Tab 补全。
+
+- `timer 25m "写代码"` 设置后台倒计时。单位为 `d`、`h`、`m`、`s`，隐藏到托盘后仍会在到点时弹出提醒。
+- `pick 火锅 烧烤 拉面` 从给定选项里随机选一个。选项名含空格时加引号。
+- `todo add "补发版说明"` 添加待办，`todo list` 查看未完成项，`todo done 3` 标记编号 3 完成。待办保存到应用配置目录中的 `todos.json`。
+- `welcome set "欢迎回来！"` 修改并保存终端顶部的欢迎语。`welcome` 查看当前欢迎语，`welcome reset` 恢复默认。
 
 ## 技术栈
 
@@ -20,17 +29,18 @@
 
 ```
 Vue 3 + WebView2
-  TerminalView.vue       终端外壳：输入、历史、输出、弹窗
-  terminal-commands.ts   命令表、别名展开、Tab 补全
-  *-command.ts           各命令的参数解析 → CommandResult
-  desktop-platform.ts    IPC 桥
+  terminal/TerminalView.vue       输入、历史、输出和弹窗
+  terminal/terminal-commands.ts   命令表、别名展开和 Tab 补全
+  features/                     各功能的命令、界面、规则和测试
+  platform/desktop-platform.ts    桌面 IPC 桥
           │
           │  Tauri invoke
           ▼
 Rust + Tauri 2
   main.rs                插件与命令注册、状态装配
-  lifecycle.rs           托盘、全局快捷键、窗口显隐
-  directories.rs / notes.rs / aliases.rs / …   业务实现
+  app/lifecycle.rs       托盘、全局快捷键和窗口显隐
+  features/              文件、外观、待办、搜索、笔记和别名
+  platform/              Windows 打开目标、进程检测和配置写入
   %APPDATA%/dev.blis.terminal/                 JSON 与笔记存储
 ```
 
@@ -61,22 +71,22 @@ Rust + Tauri 2
 blis-terminal/
 ├─ apps/desktop/
 │  ├─ src/                      Vue 前端
-│  │  ├─ TerminalView.vue       终端外壳：输入、历史、输出、弹窗
-│  │  ├─ terminal-commands.ts   命令表、解析入口、补全
-│  │  ├─ *-command.ts           各命令的参数解析（directory / search / note …）
-│  │  ├─ desktop-platform.ts    IPC 桥
-│  │  ├─ command-types.ts       前后端共享的 operation 契约
-│  │  ├─ terminal-keyboard.ts   快捷键与输入历史
-│  │  └─ *.test.ts              Vitest 单测
+│  │  ├─ terminal/             输入、历史、快捷键、命令表和共享类型
+│  │  ├─ features/
+│  │  │  ├─ games/             Snake、Runner、Dodge 的命令、规则、画面和测试
+│  │  │  ├─ files/             目录和文件命令、路径补全
+│  │  │  ├─ appearance/        背景、透明度和欢迎语
+│  │  │  ├─ notes/             笔记命令与编辑器
+│  │  │  ├─ search/            搜索命令
+│  │  │  ├─ tasks/             倒计时、提醒和待办
+│  │  │  └─ tools/             别名、计算、时间和随机选择
+│  │  ├─ components/           多个功能共用的界面组件
+│  │  └─ platform/             桌面 IPC 调用
 │  └─ src-tauri/                Rust 后端
 │     ├─ src/main.rs            插件、命令注册、状态装配
-│     ├─ src/lifecycle.rs       托盘、全局快捷键、窗口生命周期
-│     ├─ src/directories.rs     目录与路径操作
-│     ├─ src/file_operations.rs mkdir / cp / mv / rm（回收站）
-│     ├─ src/notes.rs           笔记读写与导出
-│     ├─ src/aliases.rs         命令别名
-│     ├─ src/search_settings.rs 搜索站点与浏览器
-│     ├─ src/appearance.rs      背景主题与不透明度
+│     ├─ src/app/               托盘、全局快捷键和窗口生命周期
+│     ├─ src/features/          各命令的系统操作和设置
+│     ├─ src/platform/          Windows 调用和共用存储工具
 │     └─ tauri.conf.json        窗口、CSP、NSIS 打包配置
 ├─ docs/phase-0.md              架构决策与实测记录
 ├─ scripts/                     内存测量脚本
