@@ -51,12 +51,21 @@ jobs:
         with:
           name: blis-terminal-windows-x64
           path: dist
-      - name: Publish release
+      - name: Create draft and upload assets
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Blis Terminal $TAG" --generate-notes
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Blis Terminal $TAG" --generate-notes --draft
+          fi
+
+          is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [[ "$is_draft" != "true" ]]; then
+            echo "Release $TAG is already published and immutable; refusing to publish without its assets."
+            exit 1
+          fi
+
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/*.exe --clobber
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
