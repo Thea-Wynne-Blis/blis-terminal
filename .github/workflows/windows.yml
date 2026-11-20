@@ -57,8 +57,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
+          release_flags=()
+          notes_flag=--generate-notes
+          if [[ "${TAG%%+*}" == *-* ]]; then
+            release_flags+=(--prerelease)
+            notes_flag=--notes-from-tag
+          fi
+
           if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "Blis Terminal $TAG" --generate-notes --draft
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --title "Blis Terminal $TAG" "$notes_flag" --draft "${release_flags[@]}"
           fi
 
           is_draft=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
@@ -68,4 +75,4 @@ jobs:
           fi
 
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" dist/*.exe --clobber
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false "${release_flags[@]}"
