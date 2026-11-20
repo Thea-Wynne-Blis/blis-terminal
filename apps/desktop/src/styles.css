@@ -203,6 +203,37 @@ code {
   font: inherit;
 }
 
+.arcade-panel {
+  width: min(100%, 480px);
+  margin-top: 0.45em;
+}
+
+.arcade-panel:focus {
+  outline: none;
+}
+
+.arcade-panel strong,
+.arcade-status {
+  color: var(--accent);
+}
+
+.arcade-controls {
+  margin: 0.2em 0 0.5em;
+}
+
+.arcade-panel canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  outline: 1px solid var(--menu-highlight);
+  image-rendering: pixelated;
+}
+
+.arcade-status {
+  min-height: 1.55em;
+  margin-top: 0.4em;
+}
+
 code,
 .prompt-mark {
   color: var(--accent);
