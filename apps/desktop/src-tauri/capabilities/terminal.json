@@ -12,6 +12,7 @@
     "allow-execute-directory",
     "allow-execute-note",
     "allow-execute-open-target",
+    "allow-execute-ping",
     "allow-execute-todo",
     "allow-execute-welcome",
     "allow-exit-app",

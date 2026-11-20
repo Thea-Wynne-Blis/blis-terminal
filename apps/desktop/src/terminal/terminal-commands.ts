@@ -18,6 +18,8 @@ import { completeGame, gameDefinition } from '../features/games/game-command'
 import { noteDefinition } from '../features/notes/note-command'
 import { openDefinition } from '../features/files/open-command'
 import { pickDefinition } from '../features/tools/pick-command'
+import { pingDefinition } from '../features/tools/ping-command'
+import { catDefinition, vimDefinition } from '../features/files/text-file-command'
 import { searchDefinition } from '../features/search/search-command'
 import { describeShortcuts } from './terminal-keyboard'
 import { timerDefinition } from '../features/tasks/timer-command'
@@ -45,6 +47,8 @@ const commands = new Map<string, CommandDefinition>([
   ['cd', cdDefinition],
   ['ls', lsDefinition],
   ['code', codeDefinition],
+  ['cat', catDefinition],
+  ['vim', vimDefinition],
   ['mkdir', mkdirDefinition],
   ['cp', cpDefinition],
   ['mv', mvDefinition],
@@ -56,6 +60,7 @@ const commands = new Map<string, CommandDefinition>([
   ['date', dateDefinition],
   ['timer', timerDefinition],
   ['pick', pickDefinition],
+  ['ping', pingDefinition],
   ['todo', todoDefinition],
   ['game', gameDefinition],
   ['note', noteDefinition],

@@ -4,6 +4,8 @@ export type DirectoryOperation =
   | { action: 'pwd' | 'open_current' }
   | { action: 'cd'; path?: string }
   | { action: 'open_in_code'; path: string }
+  | { action: 'preview_text' | 'edit_text'; path: string }
+  | { action: 'save_text'; id: number; content: string }
   | { action: 'ls'; path?: string; all?: boolean; detailed?: boolean }
   | {
       action: 'complete_path'
@@ -32,7 +34,10 @@ export type DirectoryOutcome = {
   removal?: { id: number; path: string }
   listing?: DirectoryEntry[]
   candidates?: PathCandidate[]
+  editor?: TextDraft
 }
+
+export type TextDraft = { id: number; path: string; content: string }
 
 export type NoteFormat = 'md' | 'txt'
 
@@ -122,6 +127,7 @@ export type DesktopCommand =
   | { type: 'timer'; operation: TimerOperation }
   | { type: 'todo'; operation: TodoOperation }
   | { type: 'welcome'; operation: WelcomeOperation }
+  | { type: 'ping'; operation: { host: string; count: number } }
   | { type: 'exit' }
 
 export type GameId = 'snake' | 'runner' | 'dodge'

@@ -2,12 +2,16 @@
 
 一款 Windows 上的个人命令终端：常驻托盘，`Alt+Space` 随时唤出，在 `blis>` 提示符下管理目录、文件、笔记，搜索网页，保存常用应用。
 
-内置命令：`help` `search` `open` `pwd` `cd` `ls` `code` `mkdir` `cp` `mv` `rm` `background` `welcome` `alias` `calc` `date` `timer` `pick` `todo` `game` `note` `history` `clear` `version` `shortcut` `echo` `exit`。
+内置命令：`help` `search` `open` `pwd` `cd` `ls` `code` `cat` `vim` `mkdir` `cp` `mv` `rm` `background` `welcome` `alias` `calc` `date` `timer` `pick` `ping` `todo` `game` `note` `history` `clear` `version` `shortcut` `echo` `exit`。
 每条命令都支持 `help <命令>` 或 `<命令> --help`。
 
-`game list` 查看终端里的小游戏。`game snake` 用方向键或 WASD 移动，空格暂停。`game runner` 用空格或 ↑ 跳跃，跑过的距离计入成绩。`game dodge` 用 ←／→ 或 A／D 左右移动，按躲过的掉落物计分。跑酷和躲避都用 P 暂停或继续。三款游戏隐藏窗口后会暂停，结束后按 R 重开，Esc 返回命令行，最高纪录保存在本机。
+`game list` 查看当前可玩的游戏，`game <name>` 开始游戏。`game snake` 用方向键或 WASD 移动，空格暂停。`game runner` 用空格或 ↑ 跳跃，跑过的距离计入成绩。`game dodge` 用 ←／→ 或 A／D 左右移动，按躲过的掉落物计分。跑酷和躲避都用 P 暂停或继续。三款游戏隐藏窗口后会暂停，结束后按 R 重开，Esc 返回命令行，最高纪录保存在本机。
 
 输入 `code .` 可在 VS Code 中打开 Blis 的当前目录。`code README.md` 打开当前目录下的文件，路径含空格时用引号包住。输入部分路径后可按 Tab 补全。
+
+- `cat README.md` 在终端预览 UTF-8 文本。长文件只显示开头。
+- `vim README.md` 打开内置编辑器。按 i 编辑，按 Esc 回到普通模式，再输入 `:w` 保存、`:q` 退出、`:wq` 保存并退出或 `:q!` 放弃退出。
+- `ping example.com -c 3` 检查主机连通性。支持 IP 和主机名，默认发送 4 次。
 
 - `timer 25m "写代码"` 设置后台倒计时。单位为 `d`、`h`、`m`、`s`，隐藏到托盘后仍会在到点时弹出提醒。
 - `pick 火锅 烧烤 拉面` 从给定选项里随机选一个。选项名含空格时加引号。

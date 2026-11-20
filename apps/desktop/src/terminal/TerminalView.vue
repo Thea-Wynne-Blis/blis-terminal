@@ -14,12 +14,14 @@ import NoteEditor from '../features/notes/NoteEditor.vue'
 import RemovalDialog from '../components/RemovalDialog.vue'
 import RunnerGame from '../features/games/RunnerGame.vue'
 import SnakeGame from '../features/games/SnakeGame.vue'
+import TextFileEditor from '../features/files/TextFileEditor.vue'
 import type {
   AliasOperation,
   Appearance,
   DesktopCommand,
   GameId,
   NoteDraft,
+  TextDraft,
 } from './command-types'
 import {
   executeAlias,
@@ -77,12 +79,13 @@ const pickerOpen = ref(false)
 const pickerBusy = ref(false)
 const pickerError = ref('')
 const activeNote = ref<NoteDraft>()
+const activeFile = ref<{ draft: TextDraft; entryId: number }>()
 type PendingRemoval = { entryId: number } & (
   { kind: 'note'; title: string } | { kind: 'file'; id: number; path: string }
 )
 const pendingRemoval = ref<PendingRemoval>()
 const modalOpen = computed(() =>
-  Boolean(activeNote.value || pendingRemoval.value),
+  Boolean(activeNote.value || pendingRemoval.value || activeFile.value),
 )
 const selectedTheme = computed(() =>
   appearance.value?.themes.find(({ id }) => id === appearance.value?.selected),
@@ -103,6 +106,7 @@ const pendingOutput: Record<DesktopCommand['type'], string> = {
   alias: '正在处理命令别名…',
   directory: '正在处理目录命令…',
   note: '正在处理笔记…',
+  ping: '正在等待 Ping 结果…',
   timer: '正在设置倒计时…',
   todo: '正在处理待办…',
   search: '正在处理搜索请求…',
@@ -143,6 +147,13 @@ function handleWindowFocus() {
 
 function closeNote() {
   activeNote.value = undefined
+  void nextTick(focusInput)
+}
+
+function closeFile(message: string) {
+  if (!activeFile.value) return
+  setCommandOutput(activeFile.value.entryId, message)
+  activeFile.value = undefined
   void nextTick(focusInput)
 }
 
@@ -340,12 +351,18 @@ async function completeDesktopCommand(id: number, command: DesktopCommand) {
     if (command.type === 'alias') {
       output = await completeAliasCommand(command.operation)
     } else if (command.type === 'directory') {
-      if (command.operation.action === 'remove' && modalOpen.value)
+      if (
+        (command.operation.action === 'remove' ||
+          command.operation.action === 'edit_text') &&
+        (modalOpen.value || pickerOpen.value)
+      )
         throw new Error('请先完成当前操作。')
       const outcome = await executeDirectory(command.operation)
       workingDirectory.value = outcome.directory
       if (outcome.removal)
         pendingRemoval.value = { entryId: id, kind: 'file', ...outcome.removal }
+      if (outcome.editor)
+        activeFile.value = { entryId: id, draft: outcome.editor }
       output = outcome.listing
         ? formatDirectoryListing(outcome.listing)
         : outcome.text
@@ -675,6 +692,11 @@ onUnmounted(() => {
       />
     </div>
     <NoteEditor v-if="activeNote" :note="activeNote" @close="closeNote" />
+    <TextFileEditor
+      v-if="activeFile"
+      :draft="activeFile.draft"
+      @close="closeFile"
+    />
     <RemovalDialog
       v-if="pendingRemoval"
       :title="pendingRemoval.kind === 'note' ? '删除笔记' : '放入回收站'"

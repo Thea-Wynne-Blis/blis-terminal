@@ -9,7 +9,7 @@ use features::{
     aliases,
     appearance::{background, welcome},
     files::{directories, open_targets},
-    notes, search_settings,
+    notes, ping, search_settings,
     tasks::{timers, todos},
 };
 
@@ -55,6 +55,7 @@ fn main() {
             exit_app,
             notes::execute_note,
             open_targets::execute_open_target,
+            ping::execute_ping,
             search_settings::execute_search,
             timers::start_timer,
             todos::execute_todo,

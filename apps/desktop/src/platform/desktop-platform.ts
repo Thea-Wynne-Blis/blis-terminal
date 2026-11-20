@@ -148,6 +148,8 @@ export async function runDesktopCommand(
       return invoke('start_timer', { operation: command.operation })
     case 'todo':
       return invoke('execute_todo', { operation: command.operation })
+    case 'ping':
+      return invoke('execute_ping', { operation: command.operation })
     case 'exit':
       await invoke('exit_app')
       return ''

@@ -11,7 +11,7 @@ use crate::platform::desktop_open::open_with_system;
 
 use super::{
     directory_listing::{self, ListingEntry, PathCandidate},
-    editor, file_operations as files,
+    editor, file_operations as files, text_files,
 };
 
 #[derive(Deserialize)]
@@ -36,6 +36,16 @@ pub enum DirectoryOperation {
     OpenCurrent,
     OpenInCode {
         path: String,
+    },
+    PreviewText {
+        path: String,
+    },
+    EditText {
+        path: String,
+    },
+    SaveText {
+        id: u32,
+        content: String,
     },
     Mkdir {
         path: String,
@@ -75,12 +85,16 @@ pub struct DirectoryOutcome {
     listing: Option<Vec<ListingEntry>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     candidates: Option<Vec<PathCandidate>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    editor: Option<text_files::Draft>,
 }
 
 struct DirectorySession {
     current: PathBuf,
     pending_removal: Option<(u32, files::Item)>,
     next_removal: u32,
+    text_editor: Option<text_files::Editor>,
+    next_editor: u32,
 }
 
 pub struct DirectoryStore {
@@ -97,6 +111,8 @@ impl DirectoryStore {
                 current: directory,
                 pending_removal: None,
                 next_removal: 0,
+                text_editor: None,
+                next_editor: 0,
             }),
         }
     }
@@ -106,6 +122,7 @@ impl DirectoryStore {
         let mut removal = None;
         let mut listing = None;
         let mut candidates = None;
+        let mut editor = None;
         let text = match operation {
             DirectoryOperation::Pwd => session.current.display().to_string(),
             DirectoryOperation::Cd { path } => {
@@ -146,6 +163,24 @@ impl DirectoryStore {
                 editor::open_in_code(&target)?;
                 format!("已请求 VS Code 打开「{}」。", target.display())
             }
+            DirectoryOperation::PreviewText { path } => {
+                text_files::preview(&self.resolve(&session.current, &path)?)?
+            }
+            DirectoryOperation::EditText { path } => {
+                let target = self.resolve(&session.current, &path)?;
+                let id = session.next_editor.wrapping_add(1);
+                let (opened, draft) = text_files::Editor::open(id, &target)?;
+                session.next_editor = id;
+                session.text_editor = Some(opened);
+                editor = Some(draft);
+                String::new()
+            }
+            DirectoryOperation::SaveText { id, content } => session
+                .text_editor
+                .as_mut()
+                .filter(|editor| editor.id == id)
+                .ok_or("文件编辑会话已失效，请重新打开文件。")?
+                .save(&content)?,
             DirectoryOperation::Mkdir { path } => {
                 files::make_directory(&self.resolve(&session.current, &path)?)?
             }
@@ -201,6 +236,7 @@ impl DirectoryStore {
             removal,
             listing,
             candidates,
+            editor,
         })
     }
 

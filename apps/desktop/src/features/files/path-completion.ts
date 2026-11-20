@@ -8,6 +8,8 @@ const pathSlots = new Map<
   ['cd', { count: 1, directoriesOnly: true }],
   ['ls', { count: 1, directoriesOnly: true, options: true }],
   ['code', { count: 1, directoriesOnly: false }],
+  ['cat', { count: 1, directoriesOnly: false }],
+  ['vim', { count: 1, directoriesOnly: false }],
   ['mkdir', { count: 1, directoriesOnly: true, options: true }],
   ['cp', { count: 2, directoriesOnly: false, options: true }],
   ['mv', { count: 2, directoriesOnly: false, options: true }],

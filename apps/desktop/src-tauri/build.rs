@@ -7,6 +7,7 @@ fn main() {
         "execute_note",
         "execute_search",
         "execute_open_target",
+        "execute_ping",
         "execute_todo",
         "execute_welcome",
         "exit_app",
